@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: { enabled: true }, // activa PWA también en desarrollo
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
         name: 'StreamVault',
@@ -17,29 +18,22 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'any',
         start_url: '/',
+        scope: '/',
+        lang: 'es',
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
         categories: ['entertainment'],
-        screenshots: [],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\.themoviedb\.org\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'tmdb-api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-            },
-          },
-          {
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'tmdb-images-cache',
+              cacheName: 'tmdb-images',
               expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 7 },
             },
           },
