@@ -13,6 +13,7 @@ import Watch from './pages/Watch';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Watchlist from './pages/Watchlist';
+import Novelas from './pages/Novelas';
 import AdminLayout from './pages/admin/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
 import Users from './pages/admin/Users';
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/movie/:id" element={<Layout><MovieDetail /></Layout>} />
           <Route path="/series/:id" element={<Layout><SeriesDetail /></Layout>} />
           <Route path="/watch/:type/:id" element={<PrivateRoute><Watch /></PrivateRoute>} />
+          <Route path="/novelas" element={<Layout><Novelas /></Layout>} />
           <Route path="/watchlist" element={<PrivateRoute><Layout><Watchlist /></Layout></PrivateRoute>} />
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<Dashboard />} />

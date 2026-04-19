@@ -41,6 +41,7 @@ export default function Navbar() {
     { to: '/', label: 'Inicio' },
     { to: '/movies', label: 'Películas' },
     { to: '/series', label: 'Series' },
+    { to: '/novelas', label: '💕 Novelas' },
   ];
 
   return (
