@@ -7,9 +7,10 @@ const auth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, role, active FROM users WHERE id = ?').get(decoded.id);
+    const user = db.users.findById(decoded.id);
     if (!user || !user.active) return res.status(401).json({ error: 'Usuario inactivo o no encontrado' });
-    req.user = user;
+    const { password, ...safeUser } = user;
+    req.user = safeUser;
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido' });
