@@ -147,48 +147,88 @@ router.get('/stream/:id', auth, (req, res) => {
   if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
   const base = `${url}/${user}/${pass}/${req.params.id}`;
   res.json({
-    ts:   base,
-    m3u8: `${base}.m3u8`,
+    ts:         base,
+    m3u8:       `${base}.m3u8`,
     proxy_m3u8: `/api/iptv/proxy/${req.params.id}/index.m3u8`,
     proxy_ts:   `/api/iptv/proxy/${req.params.id}/stream.ts`,
   });
 });
 
+// ─── Debug: check if a stream URL is reachable from the server ───────────────
+router.get('/debug/:id', auth, async (req, res) => {
+  const { url, user, pass } = getCredentials();
+  if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
+  const urls = [
+    `${url}/${user}/${pass}/${req.params.id}.m3u8`,
+    `${url}/live/${user}/${pass}/${req.params.id}.m3u8`,
+    `${url}/${user}/${pass}/${req.params.id}`,
+  ];
+  const results = [];
+  for (const u of urls) {
+    try {
+      const r = await axios.get(u, {
+        timeout: 8000, responseType: 'text',
+        headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+        maxRedirects: 5,
+      });
+      results.push({ url: u, status: r.status, contentType: r.headers['content-type'], preview: r.data?.substring(0, 200) });
+    } catch (e) {
+      results.push({ url: u, error: e.message, code: e.response?.status });
+    }
+  }
+  res.json(results);
+});
+
+// ─── Helper: fetch m3u8 trying multiple URL formats ──────────────────────────
+const fetchM3u8 = async (url, user, pass, id) => {
+  const candidates = [
+    `${url}/${user}/${pass}/${id}.m3u8`,
+    `${url}/live/${user}/${pass}/${id}.m3u8`,
+    `${url}/hls/${user}/${pass}/${id}.m3u8`,
+  ];
+  for (const m3u8Url of candidates) {
+    try {
+      const response = await axios.get(m3u8Url, {
+        timeout: 15000,
+        responseType: 'text',
+        headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+        maxRedirects: 5,
+      });
+      const data = response.data || '';
+      if (typeof data === 'string' && (data.includes('#EXTM3U') || data.includes('#EXT-X'))) {
+        return { m3u8Url, content: data };
+      }
+    } catch {}
+  }
+  return null;
+};
+
 // ─── PROXY: m3u8 playlist (rewrites segment URLs → through our server) ────────
 router.get('/proxy/:id/index.m3u8', async (req, res) => {
   const { url, user, pass } = getCredentials();
-  if (!url) return res.status(500).send('IPTV no configurado');
+  if (!url) return res.status(500).send('# Error: IPTV no configurado');
 
-  const m3u8Url = `${url}/${user}/${pass}/${req.params.id}.m3u8`;
-
-  try {
-    const response = await axios.get(m3u8Url, {
-      timeout: 15000,
-      responseType: 'text',
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-
-    let content = response.data;
-
-    // Rewrite sub-playlist and segment URLs to go through our proxy
-    const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
-
-    content = content.replace(/^((?!#).+)$/gm, (line) => {
-      if (!line.trim()) return line;
-      const absUrl = line.startsWith('http') ? line : baseUrl + line;
-      if (line.endsWith('.m3u8')) {
-        return `/api/iptv/proxy/sub/${toBase64(absUrl)}/playlist.m3u8`;
-      }
-      return `/api/iptv/proxy/seg/${toBase64(absUrl)}`;
-    });
-
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.send(content);
-  } catch (e) {
-    res.status(502).send(`# Error: ${e.message}`);
+  const result = await fetchM3u8(url, user, pass, req.params.id);
+  if (!result) {
+    return res.status(502).send('# Error: No se pudo obtener el stream m3u8 del servidor IPTV');
   }
+
+  const { m3u8Url, content } = result;
+  const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
+
+  const rewritten = content.replace(/^((?!#).+)$/gm, (line) => {
+    if (!line.trim()) return line;
+    const absUrl = line.startsWith('http') ? line : baseUrl + line;
+    if (line.endsWith('.m3u8')) {
+      return `/api/iptv/proxy/sub/${toBase64(absUrl)}/playlist.m3u8`;
+    }
+    return `/api/iptv/proxy/seg/${toBase64(absUrl)}`;
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(rewritten);
 });
 
 // ─── PROXY: sub-playlist (variant quality m3u8) ───────────────────────────────
@@ -197,7 +237,8 @@ router.get('/proxy/sub/:encoded/playlist.m3u8', async (req, res) => {
     const origUrl = fromBase64(req.params.encoded);
     const response = await axios.get(origUrl, {
       timeout: 15000, responseType: 'text',
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+      maxRedirects: 5,
     });
 
     let content = response.data;
@@ -225,7 +266,8 @@ router.get('/proxy/seg/:encoded', async (req, res) => {
     const response = await axios.get(segUrl, {
       timeout: 30000,
       responseType: 'stream',
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+      maxRedirects: 5,
     });
 
     res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp2t');
@@ -250,7 +292,8 @@ router.get('/proxy/:id/stream.ts', async (req, res) => {
     const response = await axios.get(tsUrl, {
       timeout: 30000,
       responseType: 'stream',
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+      maxRedirects: 5,
     });
     res.setHeader('Content-Type', 'video/mp2t');
     res.setHeader('Access-Control-Allow-Origin', '*');
