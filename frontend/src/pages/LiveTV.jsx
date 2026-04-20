@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, X, Tv, RefreshCw, ChevronRight, List, WifiOff, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import IPTVPlayer from '../components/IPTVPlayer';
+import ChannelLogo from '../components/ChannelLogo';
 import api from '../lib/api';
 
 export default function LiveTV() {
@@ -150,18 +151,7 @@ export default function LiveTV() {
           {/* Channel info bar */}
           {currentChannel && (
             <div className="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-              {currentChannel.stream_icon ? (
-                <img
-                  src={currentChannel.stream_icon}
-                  alt={currentChannel.name}
-                  className="w-10 h-10 object-contain rounded-lg bg-gray-800 p-1 flex-shrink-0"
-                  onError={e => e.target.style.display = 'none'}
-                />
-              ) : (
-                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Tv size={18} className="text-gray-500" />
-                </div>
-              )}
+              <ChannelLogo src={currentChannel.stream_icon} name={currentChannel.name} size="lg" />
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold text-sm truncate">{currentChannel.name}</p>
                 <p className="text-gray-500 text-xs">{currentChannel.category_name || 'Sin categoría'}</p>
@@ -236,19 +226,7 @@ export default function LiveTV() {
                       onClick={() => selectChannel(ch)}
                       className={`w-full text-left flex items-center gap-3 px-3 py-2.5 border-b border-gray-800/40 transition-all hover:bg-gray-800/60 ${isActive ? 'bg-accent/10 border-l-2 border-l-accent' : ''}`}
                     >
-                      {/* Logo */}
-                      <div className="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {ch.stream_icon ? (
-                          <img
-                            src={ch.stream_icon}
-                            alt={ch.name}
-                            className="w-full h-full object-contain p-0.5"
-                            onError={e => { e.target.style.display = 'none'; }}
-                          />
-                        ) : (
-                          <Tv size={14} className="text-gray-600" />
-                        )}
-                      </div>
+                      <ChannelLogo src={ch.stream_icon} name={ch.name} />
 
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-semibold line-clamp-1 ${isActive ? 'text-accent-light' : 'text-white'}`}>

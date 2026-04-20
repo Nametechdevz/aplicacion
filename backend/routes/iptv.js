@@ -32,6 +32,64 @@ const xtreamGet = async (action, extra = {}) => {
 const toBase64 = (str) => Buffer.from(str).toString('base64url');
 const fromBase64 = (str) => Buffer.from(str, 'base64url').toString('utf8');
 
+// SVG placeholder when logo fails
+const TV_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <rect width="48" height="48" rx="8" fill="#1f2937"/>
+  <rect x="8" y="12" width="32" height="22" rx="3" fill="#374151"/>
+  <polygon points="20,16 20,30 34,23" fill="#6b7280"/>
+  <rect x="18" y="36" width="12" height="2" rx="1" fill="#4b5563"/>
+</svg>`;
+
+// Logo proxy cache (logo URL → buffer)
+const logoCache = new Map();
+const LOGO_CACHE_MAX = 500;
+
+// ─── Logo proxy (eliminates 404/CORS errors for channel logos) ────────────────
+router.get('/logo', async (req, res) => {
+  const url = req.query.u ? fromBase64(req.query.u) : '';
+
+  const sendPlaceholder = () => {
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(TV_PLACEHOLDER);
+  };
+
+  if (!url) return sendPlaceholder();
+
+  // Serve from cache
+  if (logoCache.has(url)) {
+    const { data, type } = logoCache.get(url);
+    res.setHeader('Content-Type', type);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(data);
+  }
+
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 6000,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      maxRedirects: 3,
+    });
+
+    const type = response.headers['content-type']?.split(';')[0] || 'image/png';
+    const data = Buffer.from(response.data);
+
+    // Keep cache bounded
+    if (logoCache.size >= LOGO_CACHE_MAX) {
+      const firstKey = logoCache.keys().next().value;
+      logoCache.delete(firstKey);
+    }
+    logoCache.set(url, { data, type });
+
+    res.setHeader('Content-Type', type);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(data);
+  } catch {
+    sendPlaceholder();
+  }
+});
+
 // ─── Test connection ──────────────────────────────────────────────────────────
 router.get('/test', async (req, res) => {
   try {
