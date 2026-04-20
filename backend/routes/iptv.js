@@ -30,9 +30,41 @@ const axiosIPTV = (opts) => axios({
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-const cache = { categories: null, catTs: 0, channels: null, chTs: 0 };
+const M3U_TTL   = 15 * 60 * 1000; // 15 min (signed tokens can expire)
+const cache = { categories: null, catTs: 0, channels: null, chTs: 0, m3uMap: null, m3uTs: 0 };
 
-const isStale = (ts) => Date.now() - ts > CACHE_TTL;
+const isStale = (ts, ttl = CACHE_TTL) => Date.now() - ts > ttl;
+
+// Fetch the full M3U_plus playlist from the provider, which contains signed
+// stream URLs (e.g. http://149.x.x.x/live/play/TOKEN/STREAM_ID). Index by ID.
+const getSignedStreamMap = async () => {
+  if (cache.m3uMap && !isStale(cache.m3uTs, M3U_TTL)) return cache.m3uMap;
+  const { url, user, pass } = getCredentials();
+  if (!url || !user || !pass) throw new Error('Credenciales IPTV no configuradas');
+
+  const res = await axiosIPTV({
+    url: `${url}/get.php`,
+    method: 'GET',
+    params: { username: user, password: pass, type: 'm3u_plus', output: 'ts' },
+    timeout: 60000,
+    responseType: 'text',
+    headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+  });
+
+  const map = new Map();
+  const lines = String(res.data || '').split('\n');
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (!/^https?:\/\//i.test(line)) continue;
+    // Extract stream_id = last numeric segment (may have .ts/.m3u8 extension)
+    const m = line.match(/\/(\d+)(?:\.[a-z0-9]+)?(?:\?.*)?$/i);
+    if (m) map.set(m[1], line);
+  }
+  cache.m3uMap = map;
+  cache.m3uTs  = Date.now();
+  return map;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getCredentials = () => ({
@@ -165,15 +197,23 @@ router.post('/refresh', auth, (req, res) => {
 });
 
 // ─── Stream URLs ──────────────────────────────────────────────────────────────
-router.get('/stream/:id', auth, (req, res) => {
+router.get('/stream/:id', auth, async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
-  const base = `${url}/${user}/${pass}/${req.params.id}`;
+  const id = req.params.id;
+
+  let signed = null;
+  try {
+    const map = await getSignedStreamMap();
+    signed = map.get(String(id)) || null;
+  } catch {}
+
+  const base = `${url}/${user}/${pass}/${id}`;
   res.json({
-    ts:         base,
-    m3u8:       `${base}.m3u8`,
-    proxy_m3u8: `/api/iptv/proxy/${req.params.id}/index.m3u8`,
-    proxy_ts:   `/api/iptv/proxy/${req.params.id}/stream.ts`,
+    ts:         signed || base,
+    m3u8:       signed ? signed.replace(/\.[a-z0-9]+(\?.*)?$/i, '') + '.m3u8' : `${base}.m3u8`,
+    proxy_m3u8: `/api/iptv/proxy/${id}/index.m3u8`,
+    proxy_ts:   `/api/iptv/proxy/${id}/stream.ts`,
   });
 });
 
@@ -204,11 +244,26 @@ router.get('/debug/:id', async (req, res) => {
 
 // ─── Helper: fetch m3u8 trying multiple URL formats ──────────────────────────
 const fetchM3u8 = async (url, user, pass, id) => {
-  const candidates = [
+  // 1) Try signed URL from M3U playlist first (works when provider uses
+  //    token-based CDN URLs like /live/play/TOKEN/ID)
+  const candidates = [];
+  try {
+    const map = await getSignedStreamMap();
+    const signed = map.get(String(id));
+    if (signed) {
+      // Force .m3u8 for HLS if the signed URL is .ts
+      const base = signed.replace(/\.[a-z0-9]+(\?.*)?$/i, '');
+      candidates.push(`${base}.m3u8`, signed);
+    }
+  } catch (e) {
+    console.error(`[IPTV M3U] ${e.message}`);
+  }
+  // 2) Fallbacks: standard Xtream URL formats
+  candidates.push(
     `${url}/${user}/${pass}/${id}.m3u8`,
     `${url}/live/${user}/${pass}/${id}.m3u8`,
     `${url}/hls/${user}/${pass}/${id}.m3u8`,
-  ];
+  );
   for (const m3u8Url of candidates) {
     try {
       const parsed = new URL(m3u8Url);
@@ -352,7 +407,13 @@ router.get('/proxy/:id/stream.ts', async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).end();
 
-  const tsUrl = `${url}/${user}/${pass}/${req.params.id}`;
+  let tsUrl = `${url}/${user}/${pass}/${req.params.id}`;
+  try {
+    const map = await getSignedStreamMap();
+    const signed = map.get(String(req.params.id));
+    if (signed) tsUrl = signed;
+  } catch {}
+
   try {
     const parsed = new URL(tsUrl);
     const response = await axiosIPTV({
