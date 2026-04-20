@@ -2,8 +2,14 @@ const express = require('express');
 const axios = require('axios');
 const http = require('http');
 const https = require('https');
+const { EventEmitter } = require('events');
 const db = require('../database');
 const { auth } = require('../middleware/auth');
+
+// Silence MaxListenersExceeded warnings on reused keep-alive sockets.
+// Each axios request adds transient error listeners on the shared socket,
+// which legitimately exceeds the default limit of 10.
+EventEmitter.defaultMaxListeners = 50;
 
 const router = express.Router();
 
@@ -426,35 +432,62 @@ router.get('/proxy/:id/stream.ts', async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).end();
 
-  let tsUrl = `${url}/${user}/${pass}/${req.params.id}`;
+  const id = req.params.id;
+
+  // Build candidate list: signed URL from M3U map, then Xtream fallbacks
+  const candidates = [];
   try {
     const map = await getSignedStreamMap();
-    const signed = map.get(String(req.params.id));
-    if (signed) tsUrl = signed;
-  } catch {}
-
-  try {
-    const parsed = new URL(tsUrl);
-    const response = await axiosIPTV({
-      url: tsUrl, method: 'GET',
-      timeout: 30000,
-      responseType: 'stream',
-      headers: {
-        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
-        'Referer': parsed.origin + '/',
-        'Accept': '*/*',
-        'Connection': 'keep-alive',
-        ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
-      },
-    });
-    res.setHeader('Content-Type', 'video/mp2t');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    response.data.pipe(res);
-    response.data.on('error', () => res.end());
-    req.on('close', () => { try { response.data.destroy(); } catch {} });
+    const signed = map.get(String(id));
+    if (signed) candidates.push(signed);
   } catch (e) {
-    res.status(502).end();
+    console.error(`[IPTV ts] m3u map error for id=${id}: ${e.message}`);
   }
+  candidates.push(
+    `${url}/${user}/${pass}/${id}`,
+    `${url}/live/${user}/${pass}/${id}.ts`,
+  );
+
+  let lastError = null;
+  for (const tsUrl of candidates) {
+    try {
+      const parsed = new URL(tsUrl);
+      const response = await axiosIPTV({
+        url: tsUrl, method: 'GET',
+        timeout: 30000,
+        responseType: 'stream',
+        headers: {
+          'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+          'Referer': parsed.origin + '/',
+          'Accept': '*/*',
+          'Connection': 'keep-alive',
+          ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
+        },
+        validateStatus: s => s >= 200 && s < 400,
+      });
+
+      console.log(`[IPTV ts] ${response.status} id=${id} ${tsUrl}`);
+      res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp2t');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'no-cache');
+      response.data.pipe(res);
+      response.data.on('error', (err) => {
+        console.error(`[IPTV ts] stream error id=${id}: ${err.message}`);
+        res.end();
+      });
+      req.on('close', () => { try { response.data.destroy(); } catch {} });
+      return;
+    } catch (e) {
+      const status = e.response?.status;
+      lastError = e;
+      console.error(`[IPTV ts] ${status || 'ERR'} id=${id} ${tsUrl}: ${e.message}`);
+    }
+  }
+
+  // All candidates failed — return a diagnostic header for the frontend
+  const status = lastError?.response?.status || 502;
+  res.setHeader('X-IPTV-Error', lastError?.message?.slice(0, 200) || 'upstream failed');
+  res.status(status >= 400 && status < 600 ? status : 502).end();
 });
 
 module.exports = router;
