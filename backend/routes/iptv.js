@@ -10,6 +10,8 @@ const router = express.Router();
 // Persistent HTTP agents (keep-alive) so the IPTV server sees us as one session
 const httpAgent  = new http.Agent({  keepAlive: true, maxSockets: 50 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
+httpAgent.setMaxListeners(100);
+httpsAgent.setMaxListeners(100);
 
 // Cookie jar: hostname → Cookie header string  (simple, bounded)
 const cookieJar = new Map();
