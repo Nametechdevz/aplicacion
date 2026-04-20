@@ -1,9 +1,30 @@
 const express = require('express');
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const db = require('../database');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Persistent HTTP agents (keep-alive) so the IPTV server sees us as one session
+const httpAgent  = new http.Agent({  keepAlive: true, maxSockets: 50 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
+
+// Cookie jar: hostname → Cookie header string  (simple, bounded)
+const cookieJar = new Map();
+const saveCookies = (hostname, setCookieArr) => {
+  if (!setCookieArr?.length) return;
+  const pairs = setCookieArr.map(c => c.split(';')[0]).join('; ');
+  if (pairs) cookieJar.set(hostname, pairs);
+};
+const getCookies = (hostname) => cookieJar.get(hostname) || '';
+
+const axiosIPTV = (opts) => axios({
+  httpAgent, httpsAgent,
+  maxRedirects: 5,
+  ...opts,
+});
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -188,17 +209,20 @@ const fetchM3u8 = async (url, user, pass, id) => {
   ];
   for (const m3u8Url of candidates) {
     try {
-      const { origin } = new URL(m3u8Url);
-      const response = await axios.get(m3u8Url, {
+      const parsed = new URL(m3u8Url);
+      const response = await axiosIPTV({
+        url: m3u8Url, method: 'GET',
         timeout: 15000,
         responseType: 'text',
         headers: {
           'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
-          'Referer': origin + '/',
+          'Referer': parsed.origin + '/',
           'Accept': '*/*',
+          'Connection': 'keep-alive',
+          ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
         },
-        maxRedirects: 5,
       });
+      saveCookies(parsed.hostname, response.headers['set-cookie']);
       const data = response.data || '';
       if (typeof data === 'string' && (data.includes('#EXTM3U') || data.includes('#EXT-X'))) {
         return { m3u8Url, content: data };
@@ -250,18 +274,23 @@ router.get('/proxy/:id/index.m3u8', async (req, res) => {
 // ─── PROXY: sub-playlist (variant quality m3u8) ───────────────────────────────
 router.get('/proxy/sub/:encoded/playlist.m3u8', async (req, res) => {
   let origUrl = '';
+  let subOrigin = '';
   try {
     origUrl = fromBase64(req.params.encoded);
-    const { origin: subOrigin } = new URL(origUrl);
-    const response = await axios.get(origUrl, {
+    const parsed = new URL(origUrl);
+    subOrigin = parsed.origin;
+    const response = await axiosIPTV({
+      url: origUrl, method: 'GET',
       timeout: 15000, responseType: 'text',
       headers: {
         'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
         'Referer': subOrigin + '/',
         'Accept': '*/*',
+        'Connection': 'keep-alive',
+        ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
       },
-      maxRedirects: 5,
     });
+    saveCookies(parsed.hostname, response.headers['set-cookie']);
 
     let content = response.data;
     const baseUrl = origUrl.substring(0, origUrl.lastIndexOf('/') + 1);
@@ -287,17 +316,18 @@ router.get('/proxy/seg/:encoded', async (req, res) => {
   let segUrl = '';
   try {
     segUrl = fromBase64(req.params.encoded);
-    const { origin } = new URL(segUrl);
-    const response = await axios.get(segUrl, {
+    const parsed = new URL(segUrl);
+    const response = await axiosIPTV({
+      url: segUrl, method: 'GET',
       timeout: 30000,
       responseType: 'stream',
       headers: {
         'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
-        'Referer': origin + '/',
+        'Referer': parsed.origin + '/',
         'Accept': '*/*',
         'Connection': 'keep-alive',
+        ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
       },
-      maxRedirects: 5,
       validateStatus: s => s >= 200 && s < 400,
     });
 
@@ -322,11 +352,18 @@ router.get('/proxy/:id/stream.ts', async (req, res) => {
 
   const tsUrl = `${url}/${user}/${pass}/${req.params.id}`;
   try {
-    const response = await axios.get(tsUrl, {
+    const parsed = new URL(tsUrl);
+    const response = await axiosIPTV({
+      url: tsUrl, method: 'GET',
       timeout: 30000,
       responseType: 'stream',
-      headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
-      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+        'Referer': parsed.origin + '/',
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+        ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
+      },
     });
     res.setHeader('Content-Type', 'video/mp2t');
     res.setHeader('Access-Control-Allow-Origin', '*');
