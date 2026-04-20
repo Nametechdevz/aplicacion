@@ -188,17 +188,24 @@ const fetchM3u8 = async (url, user, pass, id) => {
   ];
   for (const m3u8Url of candidates) {
     try {
+      const { origin } = new URL(m3u8Url);
       const response = await axios.get(m3u8Url, {
         timeout: 15000,
         responseType: 'text',
-        headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+        headers: {
+          'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+          'Referer': origin + '/',
+          'Accept': '*/*',
+        },
         maxRedirects: 5,
       });
       const data = response.data || '';
       if (typeof data === 'string' && (data.includes('#EXTM3U') || data.includes('#EXT-X'))) {
         return { m3u8Url, content: data };
       }
-    } catch {}
+    } catch (e) {
+      console.error(`[IPTV m3u8] ${e.response?.status || 'ERR'} ${m3u8Url}: ${e.message}`);
+    }
   }
   return null;
 };
@@ -242,22 +249,26 @@ router.get('/proxy/:id/index.m3u8', async (req, res) => {
 
 // ─── PROXY: sub-playlist (variant quality m3u8) ───────────────────────────────
 router.get('/proxy/sub/:encoded/playlist.m3u8', async (req, res) => {
+  let origUrl = '';
   try {
-    const origUrl = fromBase64(req.params.encoded);
+    origUrl = fromBase64(req.params.encoded);
+    const { origin: subOrigin } = new URL(origUrl);
     const response = await axios.get(origUrl, {
       timeout: 15000, responseType: 'text',
-      headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+      headers: {
+        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+        'Referer': subOrigin + '/',
+        'Accept': '*/*',
+      },
       maxRedirects: 5,
     });
 
     let content = response.data;
-    const parsed2 = new URL(origUrl);
-    const origin2  = parsed2.origin;
     const baseUrl = origUrl.substring(0, origUrl.lastIndexOf('/') + 1);
 
     content = content.replace(/^((?!#).+)$/gm, (line) => {
       if (!line.trim()) return line;
-      const absUrl = resolveUrl(line.trim(), baseUrl, origin2);
+      const absUrl = resolveUrl(line.trim(), baseUrl, subOrigin);
       return `/api/iptv/proxy/seg/${toBase64(absUrl)}`;
     });
 
@@ -266,19 +277,28 @@ router.get('/proxy/sub/:encoded/playlist.m3u8', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.send(content);
   } catch (e) {
+    console.error(`[IPTV sub] ${e.response?.status || 'ERR'} ${origUrl}: ${e.message}`);
     res.status(502).send(`# Error: ${e.message}`);
   }
 });
 
 // ─── PROXY: TS segment ────────────────────────────────────────────────────────
 router.get('/proxy/seg/:encoded', async (req, res) => {
+  let segUrl = '';
   try {
-    const segUrl = fromBase64(req.params.encoded);
+    segUrl = fromBase64(req.params.encoded);
+    const { origin } = new URL(segUrl);
     const response = await axios.get(segUrl, {
       timeout: 30000,
       responseType: 'stream',
-      headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+      headers: {
+        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+        'Referer': origin + '/',
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+      },
       maxRedirects: 5,
+      validateStatus: s => s >= 200 && s < 400,
     });
 
     res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp2t');
@@ -289,6 +309,8 @@ router.get('/proxy/seg/:encoded', async (req, res) => {
     response.data.on('error', () => res.end());
     req.on('close', () => { try { response.data.destroy(); } catch {} });
   } catch (e) {
+    const status = e.response?.status;
+    console.error(`[IPTV seg] ${status || 'ERR'} ${segUrl}: ${e.message}`);
     res.status(502).end();
   }
 });
