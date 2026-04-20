@@ -74,7 +74,7 @@ router.get('/settings', (req, res) => {
 });
 
 router.put('/settings', (req, res) => {
-  const allowed = ['site_name', 'tmdb_api_key', 'allow_register', 'featured_movie', 'accent_color'];
+  const allowed = ['site_name', 'tmdb_api_key', 'allow_register', 'featured_movie', 'accent_color', 'xtream_url', 'xtream_user', 'xtream_pass'];
   const filtered = {};
   for (const [key, value] of Object.entries(req.body)) {
     if (allowed.includes(key)) filtered[key] = value;
