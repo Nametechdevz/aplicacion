@@ -42,6 +42,7 @@ export default function Navbar() {
     { to: '/movies', label: 'Películas' },
     { to: '/series', label: 'Series' },
     { to: '/novelas', label: '💕 Novelas' },
+    { to: '/live', label: '📡 TV en Vivo' },
   ];
 
   return (
