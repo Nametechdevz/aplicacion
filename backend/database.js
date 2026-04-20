@@ -38,9 +38,6 @@ const defaults = {
   allow_register: 'true',
   featured_movie: '',
   accent_color: '#7c3aed',
-  xtream_url: '',
-  xtream_user: '',
-  xtream_pass: '',
 };
 for (const [key, value] of Object.entries(defaults)) {
   if (!(key in data.settings)) data.settings[key] = value;

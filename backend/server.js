@@ -12,7 +12,6 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/tmdb'));
 app.use('/api/admin', require('./routes/admin'));
-app.use('/api/iptv', require('./routes/iptv'));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));

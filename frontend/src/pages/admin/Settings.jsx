@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, Wifi } from 'lucide-react';
+import { Save, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import api from '../../lib/api';
 
 export default function Settings() {
@@ -8,20 +8,14 @@ export default function Settings() {
     tmdb_api_key: '',
     allow_register: 'true',
     accent_color: '#7c3aed',
-    xtream_url: '',
-    xtream_user: '',
-    xtream_pass: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [showXPass, setShowXPass] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
-  const [testingIptv, setTestingIptv] = useState(false);
-  const [iptvResult, setIptvResult] = useState(null);
 
   useEffect(() => {
     api.get('/admin/settings').then(r => { setSettings(s => ({ ...s, ...r.data })); setLoading(false); }).catch(() => setLoading(false));
@@ -47,21 +41,6 @@ export default function Settings() {
     } catch (e) {
       setTestResult({ ok: false, msg: e.response?.data?.error || 'API Key inválida' });
     } finally { setTesting(false); }
-  };
-
-  const testIptv = async () => {
-    setTestingIptv(true); setIptvResult(null);
-    try {
-      await api.put('/admin/settings', {
-        xtream_url: settings.xtream_url,
-        xtream_user: settings.xtream_user,
-        xtream_pass: settings.xtream_pass,
-      });
-      const res = await api.get('/iptv/test');
-      setIptvResult({ ok: true, msg: `✓ Conexión exitosa. ${res.data.categories} categorías encontradas.` });
-    } catch (e) {
-      setIptvResult({ ok: false, msg: e.response?.data?.error || 'Error de conexión IPTV' });
-    } finally { setTestingIptv(false); }
   };
 
   if (loading) return (
@@ -103,6 +82,7 @@ export default function Settings() {
                   </button>
                 ))}
               </div>
+              <p className="text-gray-500 text-xs mt-1.5">Si está deshabilitado, solo los admins pueden crear cuentas.</p>
             </div>
           </div>
         </div>
@@ -123,71 +103,11 @@ export default function Settings() {
               </button>
             </div>
             <button type="button" onClick={testTmdb} disabled={testing} className="mt-3 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors flex items-center gap-2">
-              {testing ? <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : '🔌'} Probar conexión
+              {testing ? <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : '🔌'} Probar conexión TMDB
             </button>
             {testResult && (
               <div className={`mt-3 p-3 rounded-lg text-sm ${testResult.ok ? 'bg-green-900/30 text-green-300 border border-green-800' : 'bg-red-900/30 text-red-300 border border-red-800'}`}>
                 {testResult.msg}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* IPTV Xtream */}
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Wifi size={20} className="text-red-400" />
-            <h2 className="text-lg font-bold text-white">IPTV — Xtream Codes</h2>
-          </div>
-          <p className="text-gray-500 text-sm mb-5 pb-3 border-b border-gray-800">
-            Configura tu servidor IPTV para activar la sección <strong className="text-gray-300">TV en Vivo</strong>
-          </p>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">URL del servidor</label>
-              <input
-                className="input-field"
-                value={settings.xtream_url}
-                onChange={e => setSettings({ ...settings, xtream_url: e.target.value })}
-                placeholder="http://servidor.com:8080"
-              />
-              <p className="text-gray-600 text-xs mt-1">Incluye http:// y el puerto si aplica</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Usuario</label>
-                <input
-                  className="input-field"
-                  value={settings.xtream_user}
-                  onChange={e => setSettings({ ...settings, xtream_user: e.target.value })}
-                  placeholder="usuario"
-                  autoComplete="off"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Contraseña</label>
-                <div className="relative">
-                  <input
-                    type={showXPass ? 'text' : 'password'}
-                    className="input-field pr-10"
-                    value={settings.xtream_pass}
-                    onChange={e => setSettings({ ...settings, xtream_pass: e.target.value })}
-                    placeholder="••••••••"
-                    autoComplete="off"
-                  />
-                  <button type="button" onClick={() => setShowXPass(!showXPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1">
-                    {showXPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <button type="button" onClick={testIptv} disabled={testingIptv} className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-300 hover:text-red-200 border border-red-800/50 text-sm rounded-lg transition-colors flex items-center gap-2">
-              {testingIptv ? <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /> : <Wifi size={14} />}
-              Probar conexión IPTV
-            </button>
-            {iptvResult && (
-              <div className={`p-3 rounded-lg text-sm ${iptvResult.ok ? 'bg-green-900/30 text-green-300 border border-green-800' : 'bg-red-900/30 text-red-300 border border-red-800'}`}>
-                {iptvResult.msg}
               </div>
             )}
           </div>
@@ -201,7 +121,7 @@ export default function Settings() {
         )}
 
         <button type="submit" disabled={saving} className="btn-primary w-full justify-center py-3">
-          {saving ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><Save size={18} />Guardar Todo</>}
+          {saving ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><Save size={18} />Guardar Cambios</>}
         </button>
       </form>
     </div>

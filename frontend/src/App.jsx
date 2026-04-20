@@ -14,7 +14,6 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Watchlist from './pages/Watchlist';
 import Novelas from './pages/Novelas';
-import LiveTV from './pages/LiveTV';
 import AdminLayout from './pages/admin/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
 import Users from './pages/admin/Users';
@@ -61,7 +60,6 @@ export default function App() {
           <Route path="/series/:id" element={<Layout><SeriesDetail /></Layout>} />
           <Route path="/watch/:type/:id" element={<PrivateRoute><Watch /></PrivateRoute>} />
           <Route path="/novelas" element={<Layout><Novelas /></Layout>} />
-          <Route path="/live" element={<PrivateRoute><LiveTV /></PrivateRoute>} />
           <Route path="/watchlist" element={<PrivateRoute><Layout><Watchlist /></Layout></PrivateRoute>} />
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<Dashboard />} />
