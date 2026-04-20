@@ -167,7 +167,7 @@ router.get('/debug/:id', async (req, res) => {
   for (const u of urls) {
     try {
       const r = await axios.get(u, {
-        timeout: 8000, responseType: 'text',
+        timeout: 5000, responseType: 'text',
         headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
         maxRedirects: 5,
       });
@@ -203,6 +203,13 @@ const fetchM3u8 = async (url, user, pass, id) => {
   return null;
 };
 
+// Resolve a URL line from an m3u8 file against its base
+const resolveUrl = (line, baseUrl, origin) => {
+  if (line.startsWith('http')) return line;
+  if (line.startsWith('/')) return origin + line;
+  return baseUrl + line;
+};
+
 // ─── PROXY: m3u8 playlist (rewrites segment URLs → through our server) ────────
 router.get('/proxy/:id/index.m3u8', async (req, res) => {
   const { url, user, pass } = getCredentials();
@@ -214,12 +221,14 @@ router.get('/proxy/:id/index.m3u8', async (req, res) => {
   }
 
   const { m3u8Url, content } = result;
+  const parsed = new URL(m3u8Url);
+  const origin  = parsed.origin;
   const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
 
   const rewritten = content.replace(/^((?!#).+)$/gm, (line) => {
     if (!line.trim()) return line;
-    const absUrl = line.startsWith('http') ? line : baseUrl + line;
-    if (line.endsWith('.m3u8')) {
+    const absUrl = resolveUrl(line.trim(), baseUrl, origin);
+    if (absUrl.endsWith('.m3u8')) {
       return `/api/iptv/proxy/sub/${toBase64(absUrl)}/playlist.m3u8`;
     }
     return `/api/iptv/proxy/seg/${toBase64(absUrl)}`;
@@ -242,11 +251,13 @@ router.get('/proxy/sub/:encoded/playlist.m3u8', async (req, res) => {
     });
 
     let content = response.data;
+    const parsed2 = new URL(origUrl);
+    const origin2  = parsed2.origin;
     const baseUrl = origUrl.substring(0, origUrl.lastIndexOf('/') + 1);
 
     content = content.replace(/^((?!#).+)$/gm, (line) => {
       if (!line.trim()) return line;
-      const absUrl = line.startsWith('http') ? line : baseUrl + line;
+      const absUrl = resolveUrl(line.trim(), baseUrl, origin2);
       return `/api/iptv/proxy/seg/${toBase64(absUrl)}`;
     });
 
