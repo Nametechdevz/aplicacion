@@ -155,7 +155,7 @@ router.get('/stream/:id', auth, (req, res) => {
 });
 
 // ─── PROXY: m3u8 playlist (rewrites segment URLs → through our server) ────────
-router.get('/proxy/:id/index.m3u8', auth, async (req, res) => {
+router.get('/proxy/:id/index.m3u8', async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).send('IPTV no configurado');
 
@@ -192,7 +192,7 @@ router.get('/proxy/:id/index.m3u8', auth, async (req, res) => {
 });
 
 // ─── PROXY: sub-playlist (variant quality m3u8) ───────────────────────────────
-router.get('/proxy/sub/:encoded/playlist.m3u8', auth, async (req, res) => {
+router.get('/proxy/sub/:encoded/playlist.m3u8', async (req, res) => {
   try {
     const origUrl = fromBase64(req.params.encoded);
     const response = await axios.get(origUrl, {
@@ -219,7 +219,7 @@ router.get('/proxy/sub/:encoded/playlist.m3u8', auth, async (req, res) => {
 });
 
 // ─── PROXY: TS segment ────────────────────────────────────────────────────────
-router.get('/proxy/seg/:encoded', auth, async (req, res) => {
+router.get('/proxy/seg/:encoded', async (req, res) => {
   try {
     const segUrl = fromBase64(req.params.encoded);
     const response = await axios.get(segUrl, {
@@ -241,7 +241,7 @@ router.get('/proxy/seg/:encoded', auth, async (req, res) => {
 });
 
 // ─── PROXY: direct TS stream ──────────────────────────────────────────────────
-router.get('/proxy/:id/stream.ts', auth, async (req, res) => {
+router.get('/proxy/:id/stream.ts', async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).end();
 
