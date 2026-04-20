@@ -155,7 +155,7 @@ router.get('/stream/:id', auth, (req, res) => {
 });
 
 // ─── Debug: check if a stream URL is reachable from the server ───────────────
-router.get('/debug/:id', auth, async (req, res) => {
+router.get('/debug/:id', async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
   const urls = [
