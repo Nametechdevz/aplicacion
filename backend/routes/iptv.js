@@ -218,6 +218,22 @@ router.get('/stream/:id', auth, async (req, res) => {
 });
 
 // ─── Debug: check if a stream URL is reachable from the server ───────────────
+// Debug: inspect the signed M3U map (show entry for a given stream id)
+router.get('/debug-m3u/:id', async (req, res) => {
+  try {
+    const map = await getSignedStreamMap();
+    const signed = map.get(String(req.params.id));
+    res.json({
+      mapSize: map.size,
+      requestedId: req.params.id,
+      signedUrl: signed || null,
+      sample: Array.from(map.entries()).slice(0, 5),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stack: e.stack });
+  }
+});
+
 router.get('/debug/:id', async (req, res) => {
   const { url, user, pass } = getCredentials();
   if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
@@ -249,14 +265,17 @@ const fetchM3u8 = async (url, user, pass, id) => {
   const candidates = [];
   try {
     const map = await getSignedStreamMap();
+    console.log(`[IPTV M3U] map size=${map.size} lookup id=${id}`);
     const signed = map.get(String(id));
     if (signed) {
-      // Force .m3u8 for HLS if the signed URL is .ts
+      console.log(`[IPTV M3U] signed URL: ${signed}`);
       const base = signed.replace(/\.[a-z0-9]+(\?.*)?$/i, '');
       candidates.push(`${base}.m3u8`, signed);
+    } else {
+      console.log(`[IPTV M3U] id ${id} NOT in map`);
     }
   } catch (e) {
-    console.error(`[IPTV M3U] ${e.message}`);
+    console.error(`[IPTV M3U] fetch error: ${e.message}`);
   }
   // 2) Fallbacks: standard Xtream URL formats
   candidates.push(
