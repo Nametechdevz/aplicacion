@@ -34,18 +34,53 @@ const axiosIPTV = (opts) => axios({
   ...opts,
 });
 
-// ─── In-memory cache ─────────────────────────────────────────────────────────
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-const M3U_TTL   = 15 * 60 * 1000; // 15 min (signed tokens can expire)
-const cache = { categories: null, catTs: 0, channels: null, chTs: 0, m3uMap: null, m3uTs: 0 };
+// ─── In-memory cache (per-provider) ──────────────────────────────────────────
+const CACHE_TTL = 60 * 60 * 1000;
+const M3U_TTL   = 15 * 60 * 1000;
+
+// providerKey → { categories, catTs, channels, chTs }
+const providerCache = new Map();
+// providerKey → { map, ts }
+const m3uCache = new Map();
 
 const isStale = (ts, ttl = CACHE_TTL) => Date.now() - ts > ttl;
 
-// Fetch the full M3U_plus playlist from the provider, which contains signed
-// stream URLs (e.g. http://149.x.x.x/live/play/TOKEN/STREAM_ID). Index by ID.
-const getSignedStreamMap = async () => {
-  if (cache.m3uMap && !isStale(cache.m3uTs, M3U_TTL)) return cache.m3uMap;
-  const { url, user, pass } = getCredentials();
+const getProviderCache = (key) => {
+  if (!providerCache.has(key)) providerCache.set(key, { categories: null, catTs: 0, channels: null, chTs: 0 });
+  return providerCache.get(key);
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Returns credentials for a specific provider (by id) or the first active one
+const getCredentials = (providerId) => {
+  let p = null;
+  if (providerId) p = db.providers.findById(Number(providerId));
+  if (!p) {
+    const active = db.providers.getActive();
+    p = active[0] || null;
+  }
+  if (p) return { url: (p.url || '').replace(/\/$/, ''), user: p.username || '', pass: p.password || '', providerId: String(p.id) };
+  return { url: '', user: '', pass: '', providerId: 'default' };
+};
+
+const xtreamGet = async (action, extra = {}, providerId) => {
+  const { url, user, pass } = getCredentials(providerId);
+  if (!url || !user || !pass) throw new Error('Credenciales IPTV no configuradas');
+  const res = await axios.get(`${url}/player_api.php`, {
+    params: { username: user, password: pass, action, ...extra },
+    timeout: 15000,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  return res.data;
+};
+
+// Fetch the full M3U_plus playlist from the provider; index URLs by stream ID.
+const getSignedStreamMap = async (providerId) => {
+  const key = String(providerId || 'default');
+  const cached = m3uCache.get(key);
+  if (cached && !isStale(cached.ts, M3U_TTL)) return cached.map;
+
+  const { url, user, pass } = getCredentials(providerId);
   if (!url || !user || !pass) throw new Error('Credenciales IPTV no configuradas');
 
   const res = await axiosIPTV({
@@ -63,31 +98,11 @@ const getSignedStreamMap = async () => {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
     if (!/^https?:\/\//i.test(line)) continue;
-    // Extract stream_id = last numeric segment (may have .ts/.m3u8 extension)
     const m = line.match(/\/(\d+)(?:\.[a-z0-9]+)?(?:\?.*)?$/i);
     if (m) map.set(m[1], line);
   }
-  cache.m3uMap = map;
-  cache.m3uTs  = Date.now();
+  m3uCache.set(key, { map, ts: Date.now() });
   return map;
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const getCredentials = () => ({
-  url:  (db.settings.get('xtream_url')  || '').replace(/\/$/, ''),
-  user: db.settings.get('xtream_user') || '',
-  pass: db.settings.get('xtream_pass') || '',
-});
-
-const xtreamGet = async (action, extra = {}) => {
-  const { url, user, pass } = getCredentials();
-  if (!url || !user || !pass) throw new Error('Credenciales IPTV no configuradas');
-  const res = await axios.get(`${url}/player_api.php`, {
-    params: { username: user, password: pass, action, ...extra },
-    timeout: 15000,
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-  });
-  return res.data;
 };
 
 const toBase64 = (str) => Buffer.from(str).toString('base64url');
@@ -154,89 +169,93 @@ router.get('/logo', async (req, res) => {
 // ─── Test connection ──────────────────────────────────────────────────────────
 router.get('/test', async (req, res) => {
   try {
-    const data = await xtreamGet('get_live_categories');
+    const data = await xtreamGet('get_live_categories', {}, req.query.p);
     res.json({ ok: true, categories: Array.isArray(data) ? data.length : 0 });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// ─── Categories (cached) ──────────────────────────────────────────────────────
+// ─── List available providers ─────────────────────────────────────────────────
+router.get('/providers', auth, (req, res) => {
+  res.json(db.providers.getActive().map(p => ({ id: p.id, name: p.name })));
+});
+
+// ─── Categories (cached per provider) ────────────────────────────────────────
 router.get('/categories', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const pc = getProviderCache(providerId);
   try {
-    if (!cache.categories || isStale(cache.catTs)) {
-      cache.categories = await xtreamGet('get_live_categories');
-      cache.catTs = Date.now();
+    if (!pc.categories || isStale(pc.catTs)) {
+      pc.categories = await xtreamGet('get_live_categories', {}, pid);
+      pc.catTs = Date.now();
     }
-    res.json(Array.isArray(cache.categories) ? cache.categories : []);
+    res.json(Array.isArray(pc.categories) ? pc.categories : []);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── Channels (cached, optional category filter + search) ────────────────────
+// ─── Channels (cached per provider) ──────────────────────────────────────────
 router.get('/channels', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const pc = getProviderCache(providerId);
   try {
-    if (!cache.channels || isStale(cache.chTs)) {
-      cache.channels = await xtreamGet('get_live_streams');
-      cache.chTs = Date.now();
+    if (!pc.channels || isStale(pc.chTs)) {
+      pc.channels = await xtreamGet('get_live_streams', {}, pid);
+      pc.chTs = Date.now();
     }
-
-    let list = Array.isArray(cache.channels) ? cache.channels : [];
-
-    if (req.query.category_id && req.query.category_id !== 'all') {
+    let list = Array.isArray(pc.channels) ? pc.channels : [];
+    if (req.query.category_id && req.query.category_id !== 'all')
       list = list.filter(c => String(c.category_id) === String(req.query.category_id));
-    }
-
     if (req.query.q) {
       const q = req.query.q.toLowerCase();
       list = list.filter(c => c.name?.toLowerCase().includes(q));
     }
-
     res.json(list);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Force refresh cache ──────────────────────────────────────────────────────
 router.post('/refresh', auth, (req, res) => {
-  cache.categories = null; cache.catTs = 0;
-  cache.channels = null; cache.chTs = 0;
+  providerCache.clear();
+  m3uCache.clear();
   res.json({ message: 'Caché limpiada, se recargará en la próxima petición' });
 });
 
 // ─── Stream URLs ──────────────────────────────────────────────────────────────
 router.get('/stream/:id', auth, async (req, res) => {
-  const { url, user, pass } = getCredentials();
+  const pid = req.query.p;
+  const { url, user, pass, providerId } = getCredentials(pid);
   if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
   const id = req.params.id;
 
   let signed = null;
   try {
-    const map = await getSignedStreamMap();
+    const map = await getSignedStreamMap(providerId);
     signed = map.get(String(id)) || null;
   } catch {}
 
   const base = `${url}/${user}/${pass}/${id}`;
+  const pParam = providerId ? `?p=${providerId}` : '';
   res.json({
     ts:         signed || base,
     m3u8:       signed ? signed.replace(/\.[a-z0-9]+(\?.*)?$/i, '') + '.m3u8' : `${base}.m3u8`,
-    proxy_m3u8: `/api/iptv/proxy/${id}/index.m3u8`,
-    proxy_ts:   `/api/iptv/proxy/${id}/stream.ts`,
+    proxy_m3u8: `/api/iptv/proxy/${id}/index.m3u8${pParam}`,
+    proxy_ts:   `/api/iptv/proxy/${id}/stream.ts${pParam}`,
+    provider_id: providerId,
   });
 });
 
-// ─── Debug: check if a stream URL is reachable from the server ───────────────
-// Debug: inspect the signed M3U map (show entry for a given stream id)
+// ─── Debug ────────────────────────────────────────────────────────────────────
 router.get('/debug-m3u/:id', async (req, res) => {
   try {
-    const map = await getSignedStreamMap();
+    const { providerId } = getCredentials(req.query.p);
+    const map = await getSignedStreamMap(providerId);
     const signed = map.get(String(req.params.id));
-    res.json({
-      mapSize: map.size,
-      requestedId: req.params.id,
-      signedUrl: signed || null,
-      sample: Array.from(map.entries()).slice(0, 5),
-    });
+    res.json({ mapSize: map.size, requestedId: req.params.id, signedUrl: signed || null, sample: Array.from(map.entries()).slice(0, 5) });
   } catch (e) {
-    res.status(500).json({ error: e.message, stack: e.stack });
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -265,12 +284,10 @@ router.get('/debug/:id', async (req, res) => {
 });
 
 // ─── Helper: fetch m3u8 trying multiple URL formats ──────────────────────────
-const fetchM3u8 = async (url, user, pass, id) => {
-  // 1) Try signed URL from M3U playlist first (works when provider uses
-  //    token-based CDN URLs like /live/play/TOKEN/ID)
+const fetchM3u8 = async (url, user, pass, id, providerId) => {
   const candidates = [];
   try {
-    const map = await getSignedStreamMap();
+    const map = await getSignedStreamMap(providerId);
     console.log(`[IPTV M3U] map size=${map.size} lookup id=${id}`);
     const signed = map.get(String(id));
     if (signed) {
@@ -325,10 +342,11 @@ const resolveUrl = (line, baseUrl, origin) => {
 
 // ─── PROXY: m3u8 playlist (rewrites segment URLs → through our server) ────────
 router.get('/proxy/:id/index.m3u8', async (req, res) => {
-  const { url, user, pass } = getCredentials();
+  const pid = req.query.p;
+  const { url, user, pass, providerId } = getCredentials(pid);
   if (!url) return res.status(500).send('# Error: IPTV no configurado');
 
-  const result = await fetchM3u8(url, user, pass, req.params.id);
+  const result = await fetchM3u8(url, user, pass, req.params.id, providerId);
   if (!result) {
     return res.status(502).send('# Error: No se pudo obtener el stream m3u8 del servidor IPTV');
   }
@@ -429,15 +447,15 @@ router.get('/proxy/seg/:encoded', async (req, res) => {
 
 // ─── PROXY: direct TS stream ──────────────────────────────────────────────────
 router.get('/proxy/:id/stream.ts', async (req, res) => {
-  const { url, user, pass } = getCredentials();
+  const pid = req.query.p;
+  const { url, user, pass, providerId } = getCredentials(pid);
   if (!url) return res.status(500).end();
 
   const id = req.params.id;
 
-  // Build candidate list: signed URL from M3U map, then Xtream fallbacks
   const candidates = [];
   try {
-    const map = await getSignedStreamMap();
+    const map = await getSignedStreamMap(providerId);
     const signed = map.get(String(id));
     if (signed) candidates.push(signed);
   } catch (e) {

@@ -19,6 +19,9 @@ import AdminLayout from './pages/admin/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
 import Users from './pages/admin/Users';
 import Settings from './pages/admin/Settings';
+import IPTVProviders from './pages/admin/IPTVProviders';
+import Plans from './pages/admin/Plans';
+import Subscriptions from './pages/admin/Subscriptions';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -67,6 +70,9 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="users" element={<Users />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="providers" element={<IPTVProviders />} />
+            <Route path="plans" element={<Plans />} />
+            <Route path="subscriptions" element={<Subscriptions />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

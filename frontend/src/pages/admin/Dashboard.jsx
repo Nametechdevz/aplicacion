@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserCheck, Shield, TrendingUp } from 'lucide-react';
+import { Users, UserCheck, Shield, TrendingUp, CreditCard, Star, Tv, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 
-const StatCard = ({ icon: Icon, label, value, color }) => (
-  <div className="glass-card p-6">
-    <div className="flex items-center justify-between mb-4">
-      <span className="text-gray-400 text-sm font-medium">{label}</span>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-        <Icon size={20} className="text-white" />
+const StatCard = ({ icon: Icon, label, value, color, to }) => {
+  const inner = (
+    <div className="glass-card p-6 hover:border-gray-700 transition-colors">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-gray-400 text-sm font-medium">{label}</span>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
+          <Icon size={20} className="text-white" />
+        </div>
       </div>
+      <p className="text-3xl font-black text-white">{value ?? '—'}</p>
     </div>
-    <p className="text-3xl font-black text-white">{value ?? '—'}</p>
-  </div>
-);
+  );
+  return to ? <Link to={to}>{inner}</Link> : inner;
+};
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -36,10 +39,13 @@ export default function Dashboard() {
         <p className="text-gray-400 mt-1">Resumen de la plataforma</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <StatCard icon={Users} label="Total Usuarios" value={stats?.totalUsers} color="bg-blue-600" />
-        <StatCard icon={UserCheck} label="Usuarios Activos" value={stats?.activeUsers} color="bg-green-600" />
-        <StatCard icon={Shield} label="Administradores" value={stats?.adminUsers} color="bg-accent" />
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        <StatCard icon={Users}      label="Total Usuarios"     value={stats?.totalUsers}          color="bg-blue-600"    to="/admin/users" />
+        <StatCard icon={UserCheck}  label="Activos"            value={stats?.activeUsers}         color="bg-green-600"   to="/admin/users" />
+        <StatCard icon={Shield}     label="Admins"             value={stats?.adminUsers}          color="bg-accent"      to="/admin/users" />
+        <StatCard icon={CreditCard} label="Suscripciones"      value={stats?.activeSubscriptions} color="bg-emerald-600" to="/admin/subscriptions" />
+        <StatCard icon={Star}       label="Planes Activos"     value={stats?.totalPlans}          color="bg-amber-500"   to="/admin/plans" />
+        <StatCard icon={Tv}         label="Proveedores IPTV"   value={stats?.totalProviders}      color="bg-red-600"     to="/admin/providers" />
       </div>
 
       <div className="glass-card p-6">

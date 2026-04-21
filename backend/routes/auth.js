@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../database');
 const { auth } = require('../middleware/auth');
 
+
 const router = express.Router();
 
 const signToken = (user) =>
@@ -43,7 +44,20 @@ router.post('/register', (req, res) => {
 });
 
 router.get('/me', auth, (req, res) => {
-  res.json(req.user);
+  const sub  = db.subscriptions.findActive(req.user.id);
+  const plan = sub ? db.plans.findById(sub.plan_id) : null;
+  res.json({
+    ...req.user,
+    subscription: sub ? {
+      id:           sub.id,
+      plan_id:      sub.plan_id,
+      plan_name:    plan?.name    || 'Desconocido',
+      plan_color:   plan?.color   || '#6b7280',
+      plan_features: plan?.features || {},
+      starts_at:    sub.starts_at,
+      expires_at:   sub.expires_at,
+    } : null,
+  });
 });
 
 router.put('/profile', auth, (req, res) => {

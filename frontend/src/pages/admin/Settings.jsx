@@ -1,21 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, Wifi, RefreshCw } from 'lucide-react';
+import { Save, Eye, EyeOff, CheckCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 
 export default function Settings() {
   const [settings, setSettings] = useState({
-    site_name: '', tmdb_api_key: '', allow_register: 'true',
-    accent_color: '#7c3aed', xtream_url: '', xtream_user: '', xtream_pass: '',
+    site_name: '', tmdb_api_key: '', allow_register: 'true', accent_color: '#7c3aed',
   });
-  const [loading, setLoading]       = useState(true);
-  const [saving, setSaving]         = useState(false);
-  const [saved, setSaved]           = useState(false);
-  const [error, setError]           = useState('');
-  const [showKey, setShowKey]       = useState(false);
-  const [showXPass, setShowXPass]   = useState(false);
-  const [testTmdb, setTestTmdb]     = useState({ loading: false, result: null });
-  const [testIptv, setTestIptv]     = useState({ loading: false, result: null });
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [error, setError]       = useState('');
+  const [showKey, setShowKey]   = useState(false);
+  const [testTmdb, setTestTmdb] = useState({ loading: false, result: null });
 
   useEffect(() => {
     api.get('/admin/settings')
@@ -43,24 +40,6 @@ export default function Settings() {
     } catch (e) {
       setTestTmdb({ loading: false, result: { ok: false, msg: e.response?.data?.error || 'API Key inválida' } });
     }
-  };
-
-  const runTestIptv = async () => {
-    setTestIptv({ loading: true, result: null });
-    try {
-      await api.put('/admin/settings', { xtream_url: settings.xtream_url, xtream_user: settings.xtream_user, xtream_pass: settings.xtream_pass });
-      const r = await api.get('/iptv/test');
-      setTestIptv({ loading: false, result: { ok: true, msg: `✓ Conectado — ${r.data.categories} categorías encontradas` } });
-    } catch (e) {
-      setTestIptv({ loading: false, result: { ok: false, msg: e.response?.data?.error || 'Error de conexión IPTV' } });
-    }
-  };
-
-  const handleRefreshCache = async () => {
-    setRefreshing(true);
-    try { await api.post('/iptv/refresh'); setTestIptv(t => ({ ...t, result: { ok: true, msg: '✓ Caché limpiada' } })); }
-    catch {}
-    finally { setRefreshing(false); }
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" /></div>;
@@ -127,48 +106,16 @@ export default function Settings() {
           <ResultBox result={testTmdb.result} />
         </div>
 
-        {/* ── IPTV Xtream Codes ────────────────────────────────────────────── */}
+        {/* ── IPTV (link to providers page) ────────────────────────────── */}
         <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Wifi size={20} className="text-red-400" />
-            <h2 className="text-lg font-bold text-white">IPTV — Xtream Codes</h2>
-          </div>
-          <p className="text-gray-500 text-sm mb-5 pb-3 border-b border-gray-800">
-            Activa la sección <strong className="text-gray-300">📡 TV en Vivo</strong> con tu servidor IPTV
-          </p>
-
-          <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">URL del servidor</label>
-              <input className="input-field" value={settings.xtream_url} onChange={e => setSettings({ ...settings, xtream_url: e.target.value })} placeholder="http://servidor.com:8080" />
-              <p className="text-gray-600 text-xs mt-1">Incluye http:// y el puerto (ej: 8080, 25461)</p>
+              <h2 className="text-lg font-bold text-white mb-1">Proveedores IPTV</h2>
+              <p className="text-gray-500 text-sm">Gestiona múltiples conexiones Xtream Codes desde la sección dedicada.</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Usuario</label>
-                <input className="input-field" value={settings.xtream_user} onChange={e => setSettings({ ...settings, xtream_user: e.target.value })} placeholder="usuario" autoComplete="off" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Contraseña</label>
-                <div className="relative">
-                  <input type={showXPass ? 'text' : 'password'} className="input-field pr-10" value={settings.xtream_pass} onChange={e => setSettings({ ...settings, xtream_pass: e.target.value })} placeholder="••••••••" autoComplete="off" />
-                  <button type="button" onClick={() => setShowXPass(!showXPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1">
-                    {showXPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 flex-wrap">
-              <button type="button" onClick={runTestIptv} disabled={testIptv.loading} className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-300 border border-red-800/50 text-sm rounded-lg transition-colors flex items-center gap-2">
-                {testIptv.loading ? <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /> : <Wifi size={14} />} Probar IPTV
-              </button>
-              <button type="button" onClick={handleRefreshCache} disabled={refreshing} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-sm rounded-lg transition-colors flex items-center gap-2">
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Limpiar caché
-              </button>
-            </div>
-
-            <ResultBox result={testIptv.result} />
+            <Link to="/admin/providers" className="btn-primary py-2 flex-shrink-0">
+              <ExternalLink size={15} /> Gestionar
+            </Link>
           </div>
         </div>
 

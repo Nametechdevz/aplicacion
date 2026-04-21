@@ -1,12 +1,35 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, ChevronRight, Tv, CreditCard, Star } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const navItems = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/admin/users', label: 'Usuarios', icon: Users },
-  { to: '/admin/settings', label: 'Configuración', icon: Settings },
+const navGroups = [
+  {
+    label: 'General',
+    items: [
+      { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+      { to: '/admin/users', label: 'Usuarios', icon: Users },
+    ],
+  },
+  {
+    label: 'IPTV',
+    items: [
+      { to: '/admin/providers', label: 'Proveedores', icon: Tv },
+    ],
+  },
+  {
+    label: 'Suscripciones',
+    items: [
+      { to: '/admin/plans', label: 'Planes', icon: Star },
+      { to: '/admin/subscriptions', label: 'Suscripciones', icon: CreditCard },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { to: '/admin/settings', label: 'Configuración', icon: Settings },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
@@ -17,6 +40,7 @@ export default function AdminLayout() {
 
   const isActive = (item) =>
     item.exact ? location.pathname === item.to : location.pathname.startsWith(item.to);
+
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -32,23 +56,28 @@ export default function AdminLayout() {
         <p className="text-gray-500 text-xs">Panel de Administración</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
-        {navItems.map(item => {
-          const Icon = item.icon;
-          const active = isActive(item);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group ${active ? 'bg-accent text-white shadow-lg shadow-accent/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-            >
-              <Icon size={18} />
-              <span className="flex-1">{item.label}</span>
-              {active && <ChevronRight size={14} />}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 p-3 overflow-y-auto space-y-4">
+        {navGroups.map(group => (
+          <div key={group.label}>
+            <p className="text-gray-600 text-xs font-semibold uppercase tracking-wider px-3 mb-1">{group.label}</p>
+            {group.items.map(item => {
+              const Icon = item.icon;
+              const active = isActive(item);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${active ? 'bg-accent text-white shadow-lg shadow-accent/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                >
+                  <Icon size={17} />
+                  <span className="flex-1">{item.label}</span>
+                  {active && <ChevronRight size={13} />}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="p-4 border-t border-gray-800">
