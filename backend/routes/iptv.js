@@ -181,6 +181,17 @@ router.get('/providers', auth, (req, res) => {
   res.json(db.providers.getActive().map(p => ({ id: p.id, name: p.name })));
 });
 
+// Return the hidden-sets for a provider, as Sets of strings
+const getHiddenSets = (providerId) => {
+  const p = db.providers.findById(providerId);
+  return {
+    hiddenLiveCats:   new Set((p?.hidden_live_categories   || []).map(String)),
+    hiddenLiveChans:  new Set((p?.hidden_live_channels     || []).map(String)),
+    hiddenVodCats:    new Set((p?.hidden_vod_categories    || []).map(String)),
+    hiddenSeriesCats: new Set((p?.hidden_series_categories || []).map(String)),
+  };
+};
+
 // ─── Categories (cached per provider) ────────────────────────────────────────
 router.get('/categories', auth, async (req, res) => {
   const pid = req.query.p;
@@ -191,7 +202,9 @@ router.get('/categories', auth, async (req, res) => {
       pc.categories = await xtreamGet('get_live_categories', {}, pid);
       pc.catTs = Date.now();
     }
-    res.json(Array.isArray(pc.categories) ? pc.categories : []);
+    const { hiddenLiveCats } = getHiddenSets(providerId);
+    const list = Array.isArray(pc.categories) ? pc.categories : [];
+    res.json(list.filter(c => !hiddenLiveCats.has(String(c.category_id))));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -206,6 +219,11 @@ router.get('/channels', auth, async (req, res) => {
       pc.chTs = Date.now();
     }
     let list = Array.isArray(pc.channels) ? pc.channels : [];
+    const { hiddenLiveCats, hiddenLiveChans } = getHiddenSets(providerId);
+    list = list.filter(c =>
+      !hiddenLiveChans.has(String(c.stream_id)) &&
+      !hiddenLiveCats.has(String(c.category_id))
+    );
     if (req.query.category_id && req.query.category_id !== 'all')
       list = list.filter(c => String(c.category_id) === String(req.query.category_id));
     if (req.query.q) {
@@ -506,6 +524,245 @@ router.get('/proxy/:id/stream.ts', async (req, res) => {
   const status = lastError?.response?.status || 502;
   res.setHeader('X-IPTV-Error', lastError?.message?.slice(0, 200) || 'upstream failed');
   res.status(status >= 400 && status < 600 ? status : 502).end();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VOD (Movies) — uses Xtream get_vod_categories / get_vod_streams / get_vod_info
+// ═══════════════════════════════════════════════════════════════════════════
+
+// vod cache per provider: { cats, catTs, streams, strTs, info: Map<id, {data,ts}> }
+const vodCache = new Map();
+const getVodCache = (key) => {
+  if (!vodCache.has(key)) vodCache.set(key, { cats: null, catTs: 0, streams: null, strTs: 0, info: new Map() });
+  return vodCache.get(key);
+};
+
+router.get('/vod/categories', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const cache = getVodCache(providerId);
+  try {
+    if (!cache.cats || isStale(cache.catTs)) {
+      cache.cats = await xtreamGet('get_vod_categories', {}, pid);
+      cache.catTs = Date.now();
+    }
+    const { hiddenVodCats } = getHiddenSets(providerId);
+    const list = Array.isArray(cache.cats) ? cache.cats : [];
+    res.json(list.filter(c => !hiddenVodCats.has(String(c.category_id))));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/vod/movies', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const cache = getVodCache(providerId);
+  try {
+    if (!cache.streams || isStale(cache.strTs)) {
+      cache.streams = await xtreamGet('get_vod_streams', {}, pid);
+      cache.strTs = Date.now();
+    }
+    let list = Array.isArray(cache.streams) ? cache.streams : [];
+    const { hiddenVodCats } = getHiddenSets(providerId);
+    list = list.filter(m => !hiddenVodCats.has(String(m.category_id)));
+    if (req.query.category_id && req.query.category_id !== 'all')
+      list = list.filter(m => String(m.category_id) === String(req.query.category_id));
+    if (req.query.q) {
+      const q = req.query.q.toLowerCase();
+      list = list.filter(m => (m.name || m.title || '').toLowerCase().includes(q));
+    }
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(200, parseInt(req.query.limit) || 60);
+    const total = list.length;
+    const paged = list.slice((page - 1) * limit, page * limit);
+    res.json({ total, page, pages: Math.ceil(total / limit), results: paged });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/vod/info/:id', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const cache = getVodCache(providerId);
+  const key = String(req.params.id);
+  try {
+    const cached = cache.info.get(key);
+    if (cached && !isStale(cached.ts, 30 * 60 * 1000)) return res.json(cached.data);
+    const data = await xtreamGet('get_vod_info', { vod_id: req.params.id }, pid);
+    cache.info.set(key, { data, ts: Date.now() });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Movie stream URL (proxied as m3u8 + ts for playback)
+router.get('/vod/stream/:id', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { url, user, pass, providerId } = getCredentials(pid);
+  if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
+  const id = req.params.id;
+  const ext = (req.query.ext || 'mp4').toLowerCase();
+  const pParam = providerId ? `?p=${providerId}` : '';
+  const direct = `${url}/movie/${user}/${pass}/${id}.${ext}`;
+  res.json({
+    direct,
+    proxy: `/api/iptv/vod/proxy/${id}.${ext}${pParam}`,
+    provider_id: providerId,
+  });
+});
+
+router.get('/vod/proxy/:file', async (req, res) => {
+  const pid = req.query.p;
+  const { url, user, pass } = getCredentials(pid);
+  if (!url) return res.status(500).end();
+  const match = req.params.file.match(/^(\d+)\.([a-z0-9]+)$/i);
+  if (!match) return res.status(400).end();
+  const [, id, ext] = match;
+  const candidates = [
+    `${url}/movie/${user}/${pass}/${id}.${ext}`,
+    `${url}/movies/${user}/${pass}/${id}.${ext}`,
+  ];
+  for (const target of candidates) {
+    try {
+      const parsed = new URL(target);
+      const r = await axiosIPTV({
+        url: target, method: 'GET',
+        timeout: 30000,
+        responseType: 'stream',
+        headers: {
+          'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+          'Referer': parsed.origin + '/',
+          ...(req.headers.range ? { Range: req.headers.range } : {}),
+          ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
+        },
+        validateStatus: s => s >= 200 && s < 400,
+      });
+      res.status(r.status);
+      if (r.headers['content-type']) res.setHeader('Content-Type', r.headers['content-type']);
+      if (r.headers['content-length']) res.setHeader('Content-Length', r.headers['content-length']);
+      if (r.headers['content-range']) res.setHeader('Content-Range', r.headers['content-range']);
+      if (r.headers['accept-ranges']) res.setHeader('Accept-Ranges', r.headers['accept-ranges']);
+      res.setHeader('Cache-Control', 'no-cache');
+      r.data.pipe(res);
+      req.on('close', () => { try { r.data.destroy(); } catch {} });
+      return;
+    } catch (e) {
+      console.error(`[IPTV vod] ${e.response?.status || 'ERR'} ${target}: ${e.message}`);
+    }
+  }
+  res.status(502).end();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Series — uses Xtream get_series_categories / get_series / get_series_info
+// ═══════════════════════════════════════════════════════════════════════════
+
+const seriesCache = new Map();
+const getSeriesCache = (key) => {
+  if (!seriesCache.has(key)) seriesCache.set(key, { cats: null, catTs: 0, list: null, listTs: 0, info: new Map() });
+  return seriesCache.get(key);
+};
+
+router.get('/series/categories', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const cache = getSeriesCache(providerId);
+  try {
+    if (!cache.cats || isStale(cache.catTs)) {
+      cache.cats = await xtreamGet('get_series_categories', {}, pid);
+      cache.catTs = Date.now();
+    }
+    const { hiddenSeriesCats } = getHiddenSets(providerId);
+    const list = Array.isArray(cache.cats) ? cache.cats : [];
+    res.json(list.filter(c => !hiddenSeriesCats.has(String(c.category_id))));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/series', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const cache = getSeriesCache(providerId);
+  try {
+    if (!cache.list || isStale(cache.listTs)) {
+      cache.list = await xtreamGet('get_series', {}, pid);
+      cache.listTs = Date.now();
+    }
+    let list = Array.isArray(cache.list) ? cache.list : [];
+    const { hiddenSeriesCats } = getHiddenSets(providerId);
+    list = list.filter(s => !hiddenSeriesCats.has(String(s.category_id)));
+    if (req.query.category_id && req.query.category_id !== 'all')
+      list = list.filter(s => String(s.category_id) === String(req.query.category_id));
+    if (req.query.q) {
+      const q = req.query.q.toLowerCase();
+      list = list.filter(s => (s.name || s.title || '').toLowerCase().includes(q));
+    }
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(200, parseInt(req.query.limit) || 60);
+    const total = list.length;
+    const paged = list.slice((page - 1) * limit, page * limit);
+    res.json({ total, page, pages: Math.ceil(total / limit), results: paged });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/series/:id', auth, async (req, res) => {
+  const pid = req.query.p;
+  const { providerId } = getCredentials(pid);
+  const cache = getSeriesCache(providerId);
+  const key = String(req.params.id);
+  try {
+    const cached = cache.info.get(key);
+    if (cached && !isStale(cached.ts, 30 * 60 * 1000)) return res.json(cached.data);
+    const data = await xtreamGet('get_series_info', { series_id: req.params.id }, pid);
+    cache.info.set(key, { data, ts: Date.now() });
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/episode/stream/:id', auth, (req, res) => {
+  const pid = req.query.p;
+  const { url, user, pass, providerId } = getCredentials(pid);
+  if (!url) return res.status(500).json({ error: 'IPTV no configurado' });
+  const id = req.params.id;
+  const ext = (req.query.ext || 'mp4').toLowerCase();
+  const pParam = providerId ? `?p=${providerId}` : '';
+  res.json({
+    direct: `${url}/series/${user}/${pass}/${id}.${ext}`,
+    proxy: `/api/iptv/episode/proxy/${id}.${ext}${pParam}`,
+    provider_id: providerId,
+  });
+});
+
+router.get('/episode/proxy/:file', async (req, res) => {
+  const pid = req.query.p;
+  const { url, user, pass } = getCredentials(pid);
+  if (!url) return res.status(500).end();
+  const match = req.params.file.match(/^(\d+)\.([a-z0-9]+)$/i);
+  if (!match) return res.status(400).end();
+  const [, id, ext] = match;
+  const target = `${url}/series/${user}/${pass}/${id}.${ext}`;
+  try {
+    const parsed = new URL(target);
+    const r = await axiosIPTV({
+      url: target, method: 'GET',
+      timeout: 30000,
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+        'Referer': parsed.origin + '/',
+        ...(req.headers.range ? { Range: req.headers.range } : {}),
+        ...(getCookies(parsed.hostname) ? { Cookie: getCookies(parsed.hostname) } : {}),
+      },
+      validateStatus: s => s >= 200 && s < 400,
+    });
+    res.status(r.status);
+    if (r.headers['content-type']) res.setHeader('Content-Type', r.headers['content-type']);
+    if (r.headers['content-length']) res.setHeader('Content-Length', r.headers['content-length']);
+    if (r.headers['content-range']) res.setHeader('Content-Range', r.headers['content-range']);
+    if (r.headers['accept-ranges']) res.setHeader('Accept-Ranges', r.headers['accept-ranges']);
+    res.setHeader('Cache-Control', 'no-cache');
+    r.data.pipe(res);
+    req.on('close', () => { try { r.data.destroy(); } catch {} });
+  } catch (e) {
+    console.error(`[IPTV ep] ${e.response?.status || 'ERR'} ${target}: ${e.message}`);
+    res.status(502).end();
+  }
 });
 
 module.exports = router;

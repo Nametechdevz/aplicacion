@@ -141,6 +141,75 @@ router.delete('/providers/:id', (req, res) => {
   res.json({ message: 'Proveedor eliminado' });
 });
 
+// ─── Provider catalog (raw, unfiltered) for visibility management ─────────────
+const xtreamRaw = async (provider, action) => {
+  const url = (provider.url || '').replace(/\/$/, '');
+  const r = await axios.get(`${url}/player_api.php`, {
+    params: { username: provider.username, password: provider.password, action },
+    timeout: 20000,
+    headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+  });
+  return Array.isArray(r.data) ? r.data : [];
+};
+
+router.get('/providers/:id/catalog', async (req, res) => {
+  const p = db.providers.findById(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Proveedor no encontrado' });
+  const kind = req.query.kind || 'live'; // live | vod | series
+  try {
+    let categories = [], items = [];
+    if (kind === 'live') {
+      [categories, items] = await Promise.all([
+        xtreamRaw(p, 'get_live_categories'),
+        xtreamRaw(p, 'get_live_streams'),
+      ]);
+    } else if (kind === 'vod') {
+      categories = await xtreamRaw(p, 'get_vod_categories');
+      items = [];
+    } else if (kind === 'series') {
+      categories = await xtreamRaw(p, 'get_series_categories');
+      items = [];
+    }
+    res.json({
+      hidden_live_categories:   p.hidden_live_categories || [],
+      hidden_live_channels:     p.hidden_live_channels || [],
+      hidden_vod_categories:    p.hidden_vod_categories || [],
+      hidden_series_categories: p.hidden_series_categories || [],
+      categories,
+      items,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.response?.data?.error || e.message });
+  }
+});
+
+router.put('/providers/:id/visibility', (req, res) => {
+  const p = db.providers.findById(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Proveedor no encontrado' });
+  const allowed = ['hidden_live_categories', 'hidden_live_channels', 'hidden_vod_categories', 'hidden_series_categories'];
+  for (const f of allowed) {
+    if (Array.isArray(req.body[f])) {
+      db.providers.setHidden(p.id, f, req.body[f]);
+    }
+  }
+  const updated = db.providers.findById(p.id);
+  res.json({
+    hidden_live_categories:   updated.hidden_live_categories || [],
+    hidden_live_channels:     updated.hidden_live_channels || [],
+    hidden_vod_categories:    updated.hidden_vod_categories || [],
+    hidden_series_categories: updated.hidden_series_categories || [],
+  });
+});
+
+router.post('/providers/:id/visibility/toggle', (req, res) => {
+  const p = db.providers.findById(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Proveedor no encontrado' });
+  const { field, value } = req.body;
+  const updated = db.providers.toggleHidden(p.id, field, value);
+  if (!updated) return res.status(400).json({ error: 'Campo inválido' });
+  res.json({ [field]: updated[field] });
+});
+
 // ─── Plans ────────────────────────────────────────────────────────────────────
 router.get('/plans', (req, res) => res.json(db.plans.getAll()));
 

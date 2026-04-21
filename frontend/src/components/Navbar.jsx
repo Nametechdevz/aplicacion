@@ -43,6 +43,8 @@ export default function Navbar() {
     { to: '/series', label: 'Series' },
     { to: '/novelas', label: '💕 Novelas' },
     { to: '/live', label: '📡 TV en Vivo' },
+    { to: '/iptv/movies', label: '🎬 Pelis IPTV' },
+    { to: '/iptv/series', label: '📺 Series IPTV' },
   ];
 
   return (

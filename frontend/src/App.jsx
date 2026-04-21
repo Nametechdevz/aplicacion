@@ -15,11 +15,14 @@ import Register from './pages/Register';
 import Watchlist from './pages/Watchlist';
 import Novelas from './pages/Novelas';
 import LiveTV from './pages/LiveTV';
+import IPTVMovies from './pages/IPTVMovies';
+import IPTVSeries from './pages/IPTVSeries';
 import AdminLayout from './pages/admin/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
 import Users from './pages/admin/Users';
 import Settings from './pages/admin/Settings';
 import IPTVProviders from './pages/admin/IPTVProviders';
+import IPTVChannels from './pages/admin/IPTVChannels';
 import Plans from './pages/admin/Plans';
 import Subscriptions from './pages/admin/Subscriptions';
 
@@ -65,12 +68,15 @@ export default function App() {
           <Route path="/watch/:type/:id" element={<PrivateRoute><Watch /></PrivateRoute>} />
           <Route path="/novelas" element={<Layout><Novelas /></Layout>} />
           <Route path="/live" element={<PrivateRoute><LiveTV /></PrivateRoute>} />
+          <Route path="/iptv/movies" element={<PrivateRoute><Layout><IPTVMovies /></Layout></PrivateRoute>} />
+          <Route path="/iptv/series" element={<PrivateRoute><Layout><IPTVSeries /></Layout></PrivateRoute>} />
           <Route path="/watchlist" element={<PrivateRoute><Layout><Watchlist /></Layout></PrivateRoute>} />
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="users" element={<Users />} />
             <Route path="settings" element={<Settings />} />
             <Route path="providers" element={<IPTVProviders />} />
+            <Route path="channels" element={<IPTVChannels />} />
             <Route path="plans" element={<Plans />} />
             <Route path="subscriptions" element={<Subscriptions />} />
           </Route>

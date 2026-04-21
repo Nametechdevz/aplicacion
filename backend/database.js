@@ -60,12 +60,24 @@ if (data.settings.xtream_url && data.iptv_providers.length === 0) {
     username: data.settings.xtream_user || '',
     password: data.settings.xtream_pass || '',
     active: true,
+    hidden_live_categories: [],
+    hidden_live_channels: [],
+    hidden_vod_categories: [],
+    hidden_series_categories: [],
     created_at: new Date().toISOString(),
   });
   delete data.settings.xtream_url;
   delete data.settings.xtream_user;
   delete data.settings.xtream_pass;
   console.log('[DB] Migrated legacy IPTV settings to providers table');
+}
+
+// Backfill hidden_* lists on existing providers
+for (const p of data.iptv_providers) {
+  if (!Array.isArray(p.hidden_live_categories))   p.hidden_live_categories = [];
+  if (!Array.isArray(p.hidden_live_channels))     p.hidden_live_channels = [];
+  if (!Array.isArray(p.hidden_vod_categories))    p.hidden_vod_categories = [];
+  if (!Array.isArray(p.hidden_series_categories)) p.hidden_series_categories = [];
 }
 
 // Seed default plans
@@ -257,6 +269,10 @@ module.exports = {
         username,
         password,
         active: !!active,
+        hidden_live_categories: [],
+        hidden_live_channels: [],
+        hidden_vod_categories: [],
+        hidden_series_categories: [],
         created_at: new Date().toISOString(),
       };
       data.iptv_providers.push(provider);
@@ -275,6 +291,28 @@ module.exports = {
     delete: (id) => {
       data.iptv_providers = data.iptv_providers.filter(p => p.id !== Number(id));
       save();
+    },
+    // Visibility helpers — all IDs stored as strings for consistent comparison
+    setHidden: (id, field, list) => {
+      const allowed = ['hidden_live_categories', 'hidden_live_channels', 'hidden_vod_categories', 'hidden_series_categories'];
+      if (!allowed.includes(field)) return null;
+      const provider = data.iptv_providers.find(p => p.id === Number(id));
+      if (!provider) return null;
+      provider[field] = Array.from(new Set((list || []).map(String)));
+      save();
+      return provider;
+    },
+    toggleHidden: (id, field, value) => {
+      const allowed = ['hidden_live_categories', 'hidden_live_channels', 'hidden_vod_categories', 'hidden_series_categories'];
+      if (!allowed.includes(field)) return null;
+      const provider = data.iptv_providers.find(p => p.id === Number(id));
+      if (!provider) return null;
+      const v = String(value);
+      const set = new Set((provider[field] || []).map(String));
+      if (set.has(v)) set.delete(v); else set.add(v);
+      provider[field] = Array.from(set);
+      save();
+      return provider;
     },
   },
 

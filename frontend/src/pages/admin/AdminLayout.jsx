@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, ChevronRight, Tv, CreditCard, Star } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, ChevronRight, Tv, CreditCard, Star, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navGroups = [
@@ -15,6 +15,7 @@ const navGroups = [
     label: 'IPTV',
     items: [
       { to: '/admin/providers', label: 'Proveedores', icon: Tv },
+      { to: '/admin/channels',  label: 'Visibilidad', icon: EyeOff },
     ],
   },
   {

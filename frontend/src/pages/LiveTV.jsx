@@ -1,9 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, X, Tv, RefreshCw, ChevronRight, PanelRightClose, PanelRightOpen, WifiOff, Settings, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Search, X, Tv, RefreshCw, ChevronRight, PanelRightClose, PanelRightOpen, WifiOff, Settings, ChevronDown, Star, LayoutGrid, List } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import IPTVPlayer from '../components/IPTVPlayer';
 import ChannelLogo from '../components/ChannelLogo';
 import api from '../lib/api';
+
+const FAV_KEY = 'streamvault:iptv:favorites';
+const VIEW_KEY = 'streamvault:iptv:view';
+const loadFavorites = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]').map(String)); }
+  catch { return new Set(); }
+};
+const saveFavorites = (set) => {
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set))); } catch {}
+};
 
 export default function LiveTV() {
   const [providers, setProviders]           = useState([]);
@@ -21,8 +31,22 @@ export default function LiveTV() {
   const [sidebarOpen, setSidebarOpen]       = useState(true);
   const [refreshing, setRefreshing]         = useState(false);
   const [providerOpen, setProviderOpen]     = useState(false);
+  const [favorites, setFavorites]           = useState(loadFavorites);
+  const [viewMode, setViewMode]             = useState(() => localStorage.getItem(VIEW_KEY) || 'list');
   const searchRef = useRef(null);
   const providerRef = useRef(null);
+
+  useEffect(() => { try { localStorage.setItem(VIEW_KEY, viewMode); } catch {} }, [viewMode]);
+
+  const toggleFavorite = (id) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      const v = String(id);
+      if (next.has(v)) next.delete(v); else next.add(v);
+      saveFavorites(next);
+      return next;
+    });
+  };
 
   // Close provider dropdown on outside click
   useEffect(() => {
@@ -73,13 +97,22 @@ export default function LiveTV() {
   // Filter channels
   useEffect(() => {
     let list = channels;
-    if (selectedCat !== 'all') list = list.filter(c => String(c.category_id) === String(selectedCat));
+    if (selectedCat === 'favorites') {
+      list = list.filter(c => favorites.has(String(c.stream_id)));
+    } else if (selectedCat !== 'all') {
+      list = list.filter(c => String(c.category_id) === String(selectedCat));
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c => c.name?.toLowerCase().includes(q));
     }
     setFiltered(list);
-  }, [channels, selectedCat, search]);
+  }, [channels, selectedCat, search, favorites]);
+
+  const favoritesCount = useMemo(
+    () => channels.reduce((n, c) => n + (favorites.has(String(c.stream_id)) ? 1 : 0), 0),
+    [channels, favorites]
+  );
 
   // Select channel
   const selectChannel = useCallback(async (ch) => {
@@ -183,6 +216,26 @@ export default function LiveTV() {
 
           <span className="text-gray-600 text-xs hidden md:block">{channels.length} canales</span>
 
+          {/* View mode toggle (only visible when sidebar open) */}
+          {sidebarOpen && (
+            <div className="hidden sm:flex bg-gray-800 rounded-lg p-0.5 border border-gray-700">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-accent text-white' : 'text-gray-500 hover:text-white'}`}
+                title="Lista"
+              >
+                <List size={13} />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-accent text-white' : 'text-gray-500 hover:text-white'}`}
+                title="Cuadrícula"
+              >
+                <LayoutGrid size={13} />
+              </button>
+            </div>
+          )}
+
           <button onClick={handleRefresh} disabled={refreshing} className="text-gray-500 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition-colors" title="Actualizar">
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -265,6 +318,12 @@ export default function LiveTV() {
               >
                 Todos
               </button>
+              <button
+                onClick={() => setSelectedCat('favorites')}
+                className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all ${selectedCat === 'favorites' ? 'bg-yellow-500 text-white shadow-sm shadow-yellow-500/40' : 'bg-gray-800 text-yellow-500 hover:bg-gray-700'}`}
+              >
+                <Star size={10} fill="currentColor" /> Favoritos {favoritesCount > 0 && `(${favoritesCount})`}
+              </button>
               {categories.map(cat => (
                 <button
                   key={cat.category_id}
@@ -285,32 +344,82 @@ export default function LiveTV() {
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="text-center py-12 px-4">
-                  <p className="text-gray-600 text-sm">{search ? `Sin resultados para "${search}"` : 'Sin canales en esta categoría'}</p>
+                  {selectedCat === 'favorites' ? (
+                    <>
+                      <Star size={24} className="text-gray-700 mx-auto mb-2" />
+                      <p className="text-gray-600 text-sm">Sin favoritos todavía</p>
+                      <p className="text-gray-700 text-xs mt-1">Toca la ⭐ junto a un canal para guardarlo aquí.</p>
+                    </>
+                  ) : (
+                    <p className="text-gray-600 text-sm">{search ? `Sin resultados para "${search}"` : 'Sin canales en esta categoría'}</p>
+                  )}
+                </div>
+              ) : viewMode === 'grid' ? (
+                <div className="grid grid-cols-2 gap-2 p-2">
+                  {filtered.map(ch => {
+                    const isActive = currentChannel?.stream_id === ch.stream_id;
+                    const isFav = favorites.has(String(ch.stream_id));
+                    return (
+                      <button
+                        key={ch.stream_id}
+                        onClick={() => selectChannel(ch)}
+                        className={`relative flex flex-col items-center p-3 rounded-xl border transition-all group ${
+                          isActive
+                            ? 'bg-accent/15 border-accent shadow-lg shadow-accent/20'
+                            : 'bg-gray-800/40 border-gray-800 hover:border-gray-700 hover:bg-gray-800'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleFavorite(ch.stream_id); }}
+                          className={`absolute top-1.5 right-1.5 p-1 rounded-lg z-10 transition-all ${isFav ? 'text-yellow-400' : 'text-gray-700 opacity-0 group-hover:opacity-100 hover:text-yellow-400'}`}
+                        >
+                          <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
+                        </button>
+                        <ChannelLogo src={ch.stream_icon} name={ch.name} size="lg" />
+                        <p className={`text-xs font-semibold text-center line-clamp-2 mt-2 ${isActive ? 'text-accent-light' : 'text-white'}`}>
+                          {ch.name}
+                        </p>
+                        {isActive && (
+                          <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 filtered.map(ch => {
                   const isActive = currentChannel?.stream_id === ch.stream_id;
+                  const isFav = favorites.has(String(ch.stream_id));
                   return (
-                    <button
+                    <div
                       key={ch.stream_id}
-                      onClick={() => selectChannel(ch)}
-                      className={`w-full text-left flex items-center gap-3 px-3 py-2.5 border-b border-gray-800/30 transition-all ${
+                      className={`group w-full flex items-center gap-3 px-3 py-2.5 border-b border-gray-800/30 transition-all ${
                         isActive
                           ? 'bg-accent/10 border-l-2 border-l-accent'
                           : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
                       }`}
                     >
-                      <ChannelLogo src={ch.stream_icon} name={ch.name} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-semibold line-clamp-1 ${isActive ? 'text-accent-light' : 'text-white'}`}>
-                          {ch.name}
-                        </p>
-                        {ch.category_name && (
-                          <p className="text-gray-600 text-xs truncate mt-0.5">{ch.category_name}</p>
-                        )}
-                      </div>
+                      <button onClick={() => selectChannel(ch)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                        <ChannelLogo src={ch.stream_icon} name={ch.name} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-semibold line-clamp-1 ${isActive ? 'text-accent-light' : 'text-white'}`}>
+                            {ch.name}
+                          </p>
+                          {ch.category_name && (
+                            <p className="text-gray-600 text-xs truncate mt-0.5">{ch.category_name}</p>
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => toggleFavorite(ch.stream_id)}
+                        className={`p-1.5 rounded-lg transition-all ${isFav ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-700 hover:text-yellow-400 opacity-0 group-hover:opacity-100'}`}
+                        title={isFav ? 'Quitar favorito' : 'Añadir a favoritos'}
+                      >
+                        <Star size={13} fill={isFav ? 'currentColor' : 'none'} />
+                      </button>
                       {isActive && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
-                    </button>
+                    </div>
                   );
                 })
               )}
@@ -324,6 +433,12 @@ export default function LiveTV() {
                   Limpiar filtros
                 </button>
               )}
+            </div>
+
+            {/* Quick links to IPTV VOD */}
+            <div className="px-3 pb-3 flex gap-2 flex-shrink-0">
+              <Link to="/iptv/movies" className="flex-1 text-center text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg py-1.5 transition-colors">🎬 Películas IPTV</Link>
+              <Link to="/iptv/series" className="flex-1 text-center text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg py-1.5 transition-colors">📺 Series IPTV</Link>
             </div>
           </aside>
         )}
