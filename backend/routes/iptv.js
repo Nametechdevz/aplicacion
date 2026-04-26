@@ -635,10 +635,11 @@ router.get('/vod/proxy/:file', async (req, res) => {
         validateStatus: s => s >= 200 && s < 400,
       });
       res.status(r.status);
-      if (r.headers['content-type']) res.setHeader('Content-Type', r.headers['content-type']);
+      if (r.headers['content-type'])   res.setHeader('Content-Type', r.headers['content-type']);
       if (r.headers['content-length']) res.setHeader('Content-Length', r.headers['content-length']);
-      if (r.headers['content-range']) res.setHeader('Content-Range', r.headers['content-range']);
-      if (r.headers['accept-ranges']) res.setHeader('Accept-Ranges', r.headers['accept-ranges']);
+      if (r.headers['content-range'])  res.setHeader('Content-Range', r.headers['content-range']);
+      res.setHeader('Accept-Ranges', r.headers['accept-ranges'] || 'bytes');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
       r.data.pipe(res);
       req.on('close', () => { try { r.data.destroy(); } catch {} });
@@ -752,10 +753,11 @@ router.get('/episode/proxy/:file', async (req, res) => {
       validateStatus: s => s >= 200 && s < 400,
     });
     res.status(r.status);
-    if (r.headers['content-type']) res.setHeader('Content-Type', r.headers['content-type']);
+    if (r.headers['content-type'])   res.setHeader('Content-Type', r.headers['content-type']);
     if (r.headers['content-length']) res.setHeader('Content-Length', r.headers['content-length']);
-    if (r.headers['content-range']) res.setHeader('Content-Range', r.headers['content-range']);
-    if (r.headers['accept-ranges']) res.setHeader('Accept-Ranges', r.headers['accept-ranges']);
+    if (r.headers['content-range'])  res.setHeader('Content-Range', r.headers['content-range']);
+    res.setHeader('Accept-Ranges', r.headers['accept-ranges'] || 'bytes');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache');
     r.data.pipe(res);
     req.on('close', () => { try { r.data.destroy(); } catch {} });

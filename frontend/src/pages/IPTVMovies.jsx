@@ -46,6 +46,8 @@ export default function IPTVMovies() {
   const [movieInfo, setMovieInfo]   = useState(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [playing, setPlaying]       = useState(false);
+  const [streamUrl, setStreamUrl]   = useState(null);
+  const [streamFallback, setStreamFallback] = useState(null);
   const videoRef = useRef(null);
   const searchTimer = useRef(null);
 
@@ -113,14 +115,35 @@ export default function IPTVMovies() {
     setSelectedMovie(null);
     setMovieInfo(null);
     setPlaying(false);
+    setStreamUrl(null);
+    setStreamFallback(null);
     if (videoRef.current) {
       try { videoRef.current.pause(); videoRef.current.removeAttribute('src'); videoRef.current.load(); } catch {}
     }
   };
 
-  const playMovie = () => {
+  const playMovie = async () => {
+    const m = selectedMovie;
+    if (!m) return;
     setPlaying(true);
-    setTimeout(() => { videoRef.current?.play().catch(() => {}); }, 100);
+    const ext = movieInfo?.movie_data?.container_extension || 'mp4';
+    const provParam = activeProvider?.id ? `?ext=${ext}&p=${activeProvider.id}` : `?ext=${ext}`;
+    try {
+      const r = await api.get(`/iptv/vod/stream/${m.stream_id}${provParam}`);
+      setStreamUrl(r.data.direct);
+      setStreamFallback(r.data.proxy);
+    } catch {
+      setStreamUrl(`/api/iptv/vod/proxy/${m.stream_id}.${ext}${pidQ}`);
+      setStreamFallback(null);
+    }
+    setTimeout(() => { videoRef.current?.play().catch(() => {}); }, 200);
+  };
+
+  const handleVideoError = () => {
+    if (streamFallback && videoRef.current?.src !== streamFallback) {
+      setStreamUrl(streamFallback);
+      setStreamFallback(null);
+    }
   };
 
   if (!loading && providers.length === 0 && error) return (
@@ -136,9 +159,7 @@ export default function IPTVMovies() {
     </div>
   );
 
-  const streamExt = movieInfo?.movie_data?.container_extension || 'mp4';
-  const streamId = selectedMovie?.stream_id;
-  const streamUrl = streamId ? `/api/iptv/vod/proxy/${streamId}.${streamExt}${pidQ}` : null;
+  // streamUrl + streamFallback are set dynamically via playMovie()
 
   return (
     <div className="pt-20 px-4 md:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen pb-10">
@@ -225,7 +246,15 @@ export default function IPTVMovies() {
           <div className="glass-card w-full max-w-4xl my-6 overflow-hidden" onClick={e => e.stopPropagation()}>
             {playing ? (
               <div className="aspect-video bg-black relative">
-                <video ref={videoRef} src={streamUrl} controls autoPlay playsInline className="w-full h-full" />
+                {streamUrl ? (
+                  <video ref={videoRef} src={streamUrl} controls autoPlay playsInline onError={handleVideoError} className="w-full h-full" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-10 h-10 border-4 border-accent/30 rounded-full relative">
+                      <div className="absolute inset-0 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  </div>
+                )}
                 <button onClick={closeModal} className="absolute top-3 right-3 bg-black/70 hover:bg-black text-white p-2 rounded-full z-10"><X size={18} /></button>
               </div>
             ) : (

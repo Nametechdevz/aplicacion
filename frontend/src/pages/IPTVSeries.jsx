@@ -49,6 +49,8 @@ export default function IPTVSeries() {
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [activeSeason, setActiveSeason] = useState(null);
   const [playingEpisode, setPlayingEpisode] = useState(null);
+  const [episodeStreamUrl, setEpisodeStreamUrl] = useState(null);
+  const [episodeStreamFallback, setEpisodeStreamFallback] = useState(null);
   const videoRef = useRef(null);
   const searchTimer = useRef(null);
 
@@ -115,14 +117,34 @@ export default function IPTVSeries() {
     setSeriesInfo(null);
     setActiveSeason(null);
     setPlayingEpisode(null);
+    setEpisodeStreamUrl(null);
+    setEpisodeStreamFallback(null);
     if (videoRef.current) {
       try { videoRef.current.pause(); videoRef.current.removeAttribute('src'); videoRef.current.load(); } catch {}
     }
   };
 
-  const playEpisode = (ep) => {
+  const handleEpisodeError = () => {
+    if (episodeStreamFallback && videoRef.current?.src !== episodeStreamFallback) {
+      setEpisodeStreamUrl(episodeStreamFallback);
+      setEpisodeStreamFallback(null);
+    }
+  };
+
+  const playEpisode = async (ep) => {
     setPlayingEpisode(ep);
-    setTimeout(() => { videoRef.current?.play().catch(() => {}); }, 100);
+    setEpisodeStreamUrl(null);
+    setEpisodeStreamFallback(null);
+    const ext = ep.container_extension || 'mp4';
+    const provParam = activeProvider?.id ? `?ext=${ext}&p=${activeProvider.id}` : `?ext=${ext}`;
+    try {
+      const r = await api.get(`/iptv/episode/stream/${ep.id}${provParam}`);
+      setEpisodeStreamUrl(r.data.direct);
+      setEpisodeStreamFallback(r.data.proxy);
+    } catch {
+      setEpisodeStreamUrl(`/api/iptv/episode/proxy/${ep.id}.${ext}${pidQ}`);
+    }
+    setTimeout(() => { videoRef.current?.play().catch(() => {}); }, 200);
   };
 
   if (!loading && providers.length === 0 && error) return (
@@ -137,9 +159,6 @@ export default function IPTVSeries() {
       </div>
     </div>
   );
-
-  const episodeExt = playingEpisode?.container_extension || 'mp4';
-  const episodeStreamUrl = playingEpisode ? `/api/iptv/episode/proxy/${playingEpisode.id}.${episodeExt}${pidQ}` : null;
 
   return (
     <div className="pt-20 px-4 md:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen pb-10">
@@ -226,8 +245,17 @@ export default function IPTVSeries() {
             <button onClick={closeModal} className="absolute top-3 right-3 bg-black/70 hover:bg-black text-white p-2 rounded-full z-20"><X size={18} /></button>
 
             {playingEpisode ? (
-              <div className="aspect-video bg-black">
-                <video ref={videoRef} src={episodeStreamUrl} controls autoPlay playsInline className="w-full h-full" />
+              <div className="aspect-video bg-black relative">
+                {episodeStreamUrl ? (
+                  <video ref={videoRef} src={episodeStreamUrl} controls autoPlay playsInline onError={handleEpisodeError} className="w-full h-full" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-10 h-10 border-4 border-accent/30 rounded-full relative">
+                      <div className="absolute inset-0 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => { setPlayingEpisode(null); setEpisodeStreamUrl(null); }} className="absolute top-3 left-3 bg-black/70 hover:bg-black text-white text-xs px-3 py-1.5 rounded-full z-10">← Episodios</button>
               </div>
             ) : (
               <div className="relative">
