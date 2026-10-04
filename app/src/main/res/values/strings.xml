@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">WEBPRO PLAYER</string>
+    <string name="app_tagline">Tu servicio IPTV, en todas tus pantallas</string>
+
+    <!-- Common actions -->
+    <string name="action_retry">Reintentar</string>
+    <string name="action_back">Volver</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_clear">Borrar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="action_refresh">Actualizar</string>
+    <string name="action_add_favorite">Añadir a favoritos</string>
+    <string name="action_remove_favorite">Quitar de favoritos</string>
+    <string name="yes">Sí</string>
+    <string name="no">No</string>
+
+    <!-- Generic states -->
+    <string name="state_error_title">Algo no salió como esperábamos</string>
+    <string name="state_empty_title">No hay nada por aquí</string>
+    <string name="catalog_empty_message">No hay contenido en esta categoría o con ese nombre. Prueba otra categoría o cambia la búsqueda.</string>
+    <plurals name="items_count">
+        <item quantity="one">%d elemento</item>
+        <item quantity="other">%d elementos</item>
+    </plurals>
+
+    <!-- Errors -->
+    <string name="error_invalid_credentials">Usuario o contraseña incorrectos. Revisa tus datos e inténtalo de nuevo.</string>
+    <string name="error_account_expired">Tu suscripción ha caducado. Contacta con tu proveedor de servicio.</string>
+    <string name="error_account_disabled">Tu cuenta está desactivada. Contacta con tu proveedor de servicio.</string>
+    <string name="error_no_connection">No hay conexión a Internet. Comprueba tu red e inténtalo de nuevo.</string>
+    <string name="error_timeout">El servidor tardó demasiado en responder. Inténtalo de nuevo en unos segundos.</string>
+    <string name="error_server_unreachable">No se pudo contactar con el servidor. Revisa la dirección (DNS/URL) y el puerto.</string>
+    <string name="error_http">El servidor respondió con un error (%1$d). Inténtalo más tarde.</string>
+    <string name="error_invalid_response">La dirección no corresponde a un servidor compatible con Xtream Codes.</string>
+    <string name="error_invalid_url">La dirección del servidor no es válida.</string>
+    <string name="error_not_found">El contenido solicitado no está disponible en el servidor.</string>
+    <string name="error_not_logged_in">Tu sesión ha finalizado. Vuelve a conectar tu servicio.</string>
+    <string name="error_unknown">Ocurrió un error inesperado. Inténtalo de nuevo.</string>
+
+    <!-- Login -->
+    <string name="login_title">Conecta tu servicio</string>
+    <string name="login_subtitle">Introduce los datos de acceso que te facilitó tu proveedor IPTV.</string>
+    <string name="login_hero_title">Tu televisión, películas y series en un solo lugar.</string>
+    <string name="login_hero_message">WEBPRO PLAYER es un reproductor compatible con la API Xtream Codes. Conecta tu propio servicio y disfrútalo en tu teléfono, tablet o televisor.</string>
+    <string name="login_server">DNS / URL del servidor</string>
+    <string name="login_server_hint">http://servidor.com:8080</string>
+    <string name="login_username">Usuario</string>
+    <string name="login_password">Contraseña</string>
+    <string name="login_show_password">Mostrar contraseña</string>
+    <string name="login_hide_password">Ocultar contraseña</string>
+    <string name="login_remember">Recordar conexión</string>
+    <string name="login_connect">CONECTAR</string>
+    <string name="login_connecting">CONECTANDO…</string>
+    <string name="login_privacy_note">Tus credenciales se guardan cifradas en este dispositivo y solo se envían a tu servidor.</string>
+    <string name="login_error_required">Este campo es obligatorio</string>
+    <string name="login_error_invalid_url">Introduce una dirección válida, por ejemplo http://servidor.com:8080</string>
+    <string name="login_error_scheme">Solo se admiten direcciones http:// o https://</string>
+
+    <!-- Sections -->
+    <string name="section_home">Inicio</string>
+    <string name="section_live">TV en vivo</string>
+    <string name="section_movies">Películas</string>
+    <string name="section_series">Series</string>
+    <string name="section_favorites">Favoritos</string>
+    <string name="section_search">Búsqueda</string>
+    <string name="section_settings">Configuración</string>
+
+    <!-- Home -->
+    <string name="home_greeting">Hola, %1$s</string>
+    <string name="home_greeting_generic">Bienvenido</string>
+    <string name="home_subtitle">¿Qué te apetece ver hoy?</string>
+    <string name="home_tile_live">Canales en directo</string>
+    <string name="home_tile_movies">Cine bajo demanda</string>
+    <string name="home_tile_series">Temporadas y episodios</string>
+    <string name="home_tile_favorites">Tu selección personal</string>
+    <string name="home_tile_search">Encuentra cualquier título</string>
+    <string name="home_tile_settings">Cuenta y preferencias</string>
+    <string name="home_continue_watching">Continuar viendo</string>
+    <string name="home_episode_label">T%1$d · E%2$d</string>
+    <string name="home_movie_label">Película</string>
+    <string name="home_untitled">Sin título</string>
+
+    <!-- Categories -->
+    <string name="category_all">Todos</string>
+    <string name="category_favorites">★ Favoritos</string>
+
+    <!-- Live -->
+    <string name="live_search_hint">Buscar canal</string>
+    <string name="live_empty_title">Sin canales</string>
+    <string name="live_empty_message">No hay canales en esta categoría o con ese nombre.</string>
+    <string name="live_now_playing">Reproduciendo</string>
+
+    <!-- Movies -->
+    <string name="movies_search_hint">Buscar película</string>
+    <string name="movies_empty_title">Sin películas</string>
+
+    <!-- Details -->
+    <string name="detail_play">Reproducir</string>
+    <string name="detail_continue_at">Continuar (%1$s)</string>
+    <string name="detail_from_start">Desde el inicio</string>
+    <string name="detail_no_plot">Sin descripción disponible.</string>
+    <string name="detail_director">Dirección</string>
+    <string name="detail_cast">Reparto</string>
+
+    <!-- Series -->
+    <string name="series_search_hint">Buscar serie</string>
+    <string name="series_empty_title">Sin series</string>
+    <string name="series_seasons">Temporadas</string>
+    <string name="series_seasons_count">%1$d temp.</string>
+    <string name="series_continue">Continuar T%1$d · E%2$d</string>
+    <string name="series_play">Reproducir T%1$d · E%2$d</string>
+    <string name="series_episode_title">E%1$d · %2$s</string>
+    <string name="series_no_episodes">Esta serie todavía no tiene episodios disponibles.</string>
+
+    <!-- Favorites -->
+    <string name="favorites_subtitle">Guardados en este dispositivo</string>
+    <string name="favorites_tab_channels">Canales</string>
+    <string name="favorites_tab_movies">Películas</string>
+    <string name="favorites_tab_series">Series</string>
+    <string name="favorites_empty_title">Aún no tienes favoritos</string>
+    <string name="favorites_empty_message">Pulsa la estrella de un canal, o mantén pulsada una película o serie, para añadirla aquí.</string>
+    <string name="favorites_hint">Mantén pulsado un elemento o pulsa su estrella para quitarlo de favoritos.</string>
+
+    <!-- Search -->
+    <string name="search_subtitle">Canales, películas y series de tu servicio</string>
+    <string name="search_hint">¿Qué quieres ver?</string>
+    <string name="search_idle_title">Busca en todo tu catálogo</string>
+    <string name="search_idle_message">Escribe al menos dos letras para buscar canales, películas y series.</string>
+    <string name="search_loading">Buscando…</string>
+    <string name="search_empty_title">Sin resultados</string>
+    <string name="search_empty_message">No encontramos nada para \"%1$s\".</string>
+    <string name="search_section_channels">Canales (%1$d)</string>
+    <string name="search_section_movies">Películas (%1$d)</string>
+    <string name="search_section_series">Series (%1$d)</string>
+
+    <!-- Player -->
+    <string name="player_live">EN VIVO</string>
+    <string name="player_play">Reproducir</string>
+    <string name="player_pause">Pausa</string>
+    <string name="player_rewind">Retroceder 10 segundos</string>
+    <string name="player_forward">Avanzar 10 segundos</string>
+    <string name="player_previous_channel">Canal anterior</string>
+    <string name="player_next_channel">Canal siguiente</string>
+    <string name="player_previous_episode">Episodio anterior</string>
+    <string name="player_next_episode">Episodio siguiente</string>
+    <string name="player_channel_list">Lista de canales</string>
+    <string name="player_volume_down">Bajar volumen</string>
+    <string name="player_volume_up">Subir volumen</string>
+    <string name="player_mute">Silenciar</string>
+    <string name="player_resize_fit">Ajustar a pantalla</string>
+    <string name="player_resize_zoom">Zoom</string>
+    <string name="player_resize_fill">Estirar</string>
+    <string name="player_lock_landscape">Bloquear en horizontal</string>
+    <string name="player_unlock_rotation">Permitir rotación</string>
+    <string name="player_reconnecting">Reconectando…</string>
+    <string name="player_reconnecting_attempt">Reconectando… intento %1$d de %2$d</string>
+    <string name="player_resumed_from">Reanudando desde %1$s</string>
+    <string name="player_error_title">No se puede reproducir</string>
+    <string name="player_error_timeout">El servidor tardó demasiado en enviar la señal.</string>
+    <string name="player_error_connection_reset">La conexión con el servidor se interrumpió.</string>
+    <string name="player_error_network">Sin conexión a Internet. La reproducción se reanudará cuando vuelva la conexión.</string>
+    <string name="player_error_behind_live">Se perdió la sincronización con la emisión en directo.</string>
+    <string name="player_error_401">El servidor rechazó tus credenciales (401). Vuelve a iniciar sesión.</string>
+    <string name="player_error_403">Acceso denegado (403). Puede que tu suscripción no incluya este contenido o hayas alcanzado el máximo de conexiones.</string>
+    <string name="player_error_404">Este contenido ya no está disponible en el servidor (404).</string>
+    <string name="player_error_server">El servidor respondió con un error (%1$d).</string>
+    <string name="player_error_source">El formato de la emisión no es compatible o la señal está dañada.</string>
+    <string name="player_error_decoder">Este dispositivo no puede decodificar el vídeo o el audio de este contenido.</string>
+    <string name="player_error_unknown">Ocurrió un error inesperado durante la reproducción.</string>
+
+    <!-- Settings -->
+    <string name="settings_account">Cuenta</string>
+    <string name="settings_server">Servidor</string>
+    <string name="settings_username">Usuario</string>
+    <string name="settings_password">Contraseña</string>
+    <string name="settings_status">Estado</string>
+    <string name="settings_expiration">Vencimiento</string>
+    <string name="settings_connections">Conexiones</string>
+    <string name="settings_remembered">Conexión recordada</string>
+    <string name="settings_unknown">Desconocido</string>
+    <string name="settings_unlimited">Sin fecha de vencimiento</string>
+    <string name="settings_playback">Reproducción</string>
+    <string name="settings_live_format">Formato de TV en vivo</string>
+    <string name="settings_live_format_help">Si un canal no carga, prueba otro formato. En automático se usa HLS cuando el servidor lo permite y MPEG-TS como alternativa.</string>
+    <string name="settings_format_auto">Automático</string>
+    <string name="settings_format_hls">HLS (m3u8)</string>
+    <string name="settings_format_ts">MPEG-TS (ts)</string>
+    <string name="settings_autoplay">Reproducir el siguiente episodio</string>
+    <string name="settings_autoplay_help">Al terminar un episodio comienza automáticamente el siguiente.</string>
+    <string name="settings_data">Sesión y datos</string>
+    <string name="settings_logout">Cerrar sesión</string>
+    <string name="settings_logout_confirm">Se cerrará la sesión y se olvidará la contraseña. Tus favoritos se conservarán.</string>
+    <string name="settings_delete_all">Eliminar configuración</string>
+    <string name="settings_delete_confirm">Se eliminarán el servidor, las credenciales, los favoritos, el historial y las preferencias de este dispositivo. Esta acción no se puede deshacer.</string>
+    <string name="settings_data_help">Cerrar sesión conserva tus favoritos. Eliminar configuración borra todos los datos guardados por la aplicación.</string>
+    <string name="settings_about">Información</string>
+    <string name="settings_app_name">Aplicación</string>
+    <string name="settings_version">Versión</string>
+    <string name="settings_about_text">WEBPRO PLAYER es un reproductor multimedia. No incluye, vende ni distribuye canales, listas ni contenido de ningún tipo: el usuario debe disponer de su propio servicio IPTV compatible con Xtream Codes y es responsable del contenido al que accede.</string>
+</resources>

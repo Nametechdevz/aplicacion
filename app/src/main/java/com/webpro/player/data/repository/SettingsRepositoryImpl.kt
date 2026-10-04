@@ -1,0 +1,46 @@
+package com.webpro.player.data.repository
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.webpro.player.domain.model.AppSettings
+import com.webpro.player.domain.model.LiveStreamFormat
+import com.webpro.player.domain.repository.SettingsRepository
+import com.webpro.player.storage.safeData
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+class SettingsRepositoryImpl(private val dataStore: DataStore<Preferences>) : SettingsRepository {
+
+    override val settings: Flow<AppSettings> = dataStore.safeData()
+        .map { prefs ->
+            AppSettings(
+                liveStreamFormat = LiveStreamFormat.fromName(prefs[LIVE_FORMAT]),
+                autoPlayNextEpisode = prefs[AUTOPLAY_NEXT] ?: true
+            )
+        }
+        .distinctUntilChanged()
+
+    override suspend fun current(): AppSettings = settings.first()
+
+    override suspend fun setLiveStreamFormat(format: LiveStreamFormat) {
+        dataStore.edit { it[LIVE_FORMAT] = format.name }
+    }
+
+    override suspend fun setAutoPlayNextEpisode(enabled: Boolean) {
+        dataStore.edit { it[AUTOPLAY_NEXT] = enabled }
+    }
+
+    override suspend fun clear() {
+        dataStore.edit { it.clear() }
+    }
+
+    private companion object {
+        val LIVE_FORMAT = stringPreferencesKey("live_stream_format")
+        val AUTOPLAY_NEXT = booleanPreferencesKey("autoplay_next_episode")
+    }
+}
