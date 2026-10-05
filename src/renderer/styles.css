@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 246 247 251;
+  --surface: 255 255 255;
+  --elevated: 241 244 249;
+  --line: 226 232 240;
+  --fg: 15 23 42;
+  --muted: 100 116 139;
+  --brand: 16 185 129;
+  --brand-soft: 209 250 229;
+  --accent: 124 58 237;
+  --danger: 239 68 68;
+  --warn: 245 158 11;
+  --ok: 34 197 94;
+  color-scheme: light;
+}
+.dark {
+  --bg: 8 12 24;
+  --surface: 17 24 39;
+  --elevated: 26 34 52;
+  --line: 40 51 72;
+  --fg: 226 232 240;
+  --muted: 140 153 176;
+  --brand: 16 185 129;
+  --brand-soft: 6 78 59;
+  --accent: 139 92 246;
+  --danger: 248 113 113;
+  --warn: 251 191 36;
+  --ok: 74 222 128;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  @apply bg-bg text-fg antialiased;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', Inter, system-ui, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+.dark body {
+  background-image: radial-gradient(1200px 600px at 10% -10%, rgba(16, 185, 129, 0.08), transparent 60%), radial-gradient(900px 500px at 110% 10%, rgba(139, 92, 246, 0.08), transparent 60%);
+}
+
+::selection {
+  background: rgb(var(--brand) / 0.35);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--line)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@layer components {
+  .glass {
+    @apply bg-surface/70 backdrop-blur-xl border border-line/70;
+  }
+  .card {
+    @apply glass rounded-2xl shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset,0_8px_30px_-12px_rgba(0,0,0,0.35)];
+  }
+  .input {
+    @apply w-full rounded-xl border border-line bg-elevated/60 px-3 py-2 text-sm text-fg outline-none transition placeholder:text-muted/70 focus:border-brand/70 focus:ring-2 focus:ring-brand/20 disabled:opacity-60;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted;
+  }
+  .table-row {
+    @apply border-b border-line/50 transition hover:bg-elevated/50;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium;
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-elevated;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/5 to-transparent;
+  }
+}
+
+/* React Flow */
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__controls button {
+  background: rgb(var(--surface));
+  border-color: rgb(var(--line));
+  color: rgb(var(--fg));
+  fill: rgb(var(--fg));
+}
+.react-flow__minimap {
+  background: rgb(var(--surface));
+  border-radius: 12px;
+}
+.react-flow__edge-path {
+  stroke: rgb(var(--muted));
+  stroke-width: 2;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: rgb(var(--brand));
+}

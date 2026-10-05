@@ -1,0 +1,9 @@
+WhatsApp CRM — Acuerdo de uso
+
+1. Esta aplicación se conecta a WhatsApp únicamente mediante la WhatsApp Business Platform (Cloud API) oficial de Meta. El uso de la plataforma está sujeto a las Políticas de WhatsApp Business y a los Términos de Meta.
+
+2. Usted se compromete a usar la aplicación de forma legítima: enviar mensajes solo a personas que aceptaron recibirlos, respetar las solicitudes de baja ("No contactar") y no utilizarla para spam ni para evadir límites o controles anti-abuso.
+
+3. Los datos (contactos, conversaciones, campañas, credenciales) se almacenan localmente en este equipo. Las credenciales se cifran con el almacenamiento seguro del sistema operativo. Usted es responsable de realizar copias de seguridad y de cumplir la normativa de protección de datos aplicable.
+
+4. La desinstalación no elimina sus datos (carpeta %APPDATA%\WhatsApp CRM). Puede borrarlos manualmente si lo desea.

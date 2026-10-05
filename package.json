@@ -1,0 +1,150 @@
+{
+  "name": "whatsapp-crm",
+  "productName": "WhatsApp CRM",
+  "version": "1.0.0",
+  "description": "CRM de escritorio para WhatsApp: contactos, etiquetas, campañas, programación, automatizaciones e IA.",
+  "author": "Nametech",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:main && npm run build:renderer",
+    "build:main": "node scripts/build-main.mjs",
+    "build:renderer": "vite build --config vite.config.mts",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "rebuild:electron": "electron-builder install-app-deps",
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "icons": "node scripts/make-icons.mjs",
+    "e2e": "node tests/e2e/app.e2e.mjs",
+    "release:win": "npm run build && electron-builder --win nsis --x64 --publish always",
+    "smoke:packaged": "node tests/e2e/packaged-smoke.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "adm-zip": "^0.6.1",
+    "baileys": "^7.0.0-rc14",
+    "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.8.9",
+    "exceljs": "^4.4.0",
+    "luxon": "^3.7.2",
+    "mammoth": "^1.13.0",
+    "papaparse": "^5.7.0",
+    "pdf-parse": "^2.4.5",
+    "qrcode": "^1.5.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/adm-zip": "^0.5.8",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^26.6.4",
+    "@types/papaparse": "^5.5.2",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@xyflow/react": "^12.12.0",
+    "autoprefixer": "^10.6.1",
+    "clsx": "^2.1.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.52.0",
+    "postcss": "^8.5.29",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3",
+    "zustand": "^5.0.15"
+  },
+  "homepage": "https://github.com/Nametechdevz/aplicacion",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nametechdevz/aplicacion.git"
+  },
+  "build": {
+    "appId": "com.nametech.whatsappcrm",
+    "productName": "WhatsApp CRM",
+    "copyright": "© 2026 Nametech",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!dist/**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": ".",
+        "filter": [
+          "icon.ico",
+          "icon.png",
+          "tray.png"
+        ]
+      }
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "WhatsApp-CRM-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WhatsApp CRM",
+      "uninstallDisplayName": "WhatsApp CRM",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "runAfterFinish": true,
+      "license": "build/license.txt"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.business"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Nametechdevz",
+        "repo": "aplicacion",
+        "releaseType": "release",
+        "tagNamePrefix": "whatsapp-crm-v"
+      }
+    ]
+  }
+}
