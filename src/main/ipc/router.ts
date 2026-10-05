@@ -159,10 +159,11 @@ export function buildRouter(app: App, desktop: DesktopBridge) {
   on('accounts.current', { perm: 'auth', account: true, fn: (_i, s) => ({ ...app.accounts.get(s.accountId), capabilities: app.accounts.capabilities(s.accountId) }) });
   on('accounts.create', {
     perm: 'accounts.manage',
-    schema: z.object({ name: str(80), provider: z.enum(['cloud_api', 'simulator']), config: z.record(z.string(), z.string().max(2000)).optional() }),
+    schema: z.object({ name: str(80), provider: z.enum(['cloud_api', 'simulator', 'baileys']), config: z.record(z.string(), z.string().max(2000)).optional(), riskAccepted: z.boolean().optional() }),
     fn: async (i, s) => {
+      if (i.provider === 'baileys' && i.riskAccepted !== true) throw new AppError('VALIDATION', 'Debe aceptar el riesgo de usar un conector no oficial para continuar.');
       const a = app.accounts.create(i);
-      app.history.audit('account.create', { userId: s.user.id, entityType: 'account', entityId: a.id, details: { name: i.name, provider: i.provider } });
+      app.history.audit('account.create', { userId: s.user.id, entityType: 'account', entityId: a.id, details: { name: i.name, provider: i.provider, riskAccepted: i.provider === 'baileys' ? true : undefined } });
       if (i.provider === 'cloud_api' && !app.webhooks.listening) {
         const wh = app.settings.get('webhook');
         await app.webhooks.start(wh.port, wh.host).catch(() => {});
@@ -182,6 +183,15 @@ export function buildRouter(app: App, desktop: DesktopBridge) {
   on('accounts.remove', { perm: 'accounts.manage', schema: z.object({ accountId: id }), fn: (i) => app.accounts.remove(i.accountId) });
   on('accounts.publicConfig', { perm: 'accounts.manage', schema: z.object({ accountId: id }), fn: (i) => app.accounts.publicConfig(i.accountId) });
   on('accounts.connect', { perm: 'auth', schema: z.object({ accountId: id }), fn: (i) => app.accounts.connect(i.accountId) });
+  on('accounts.logout', {
+    perm: 'accounts.manage',
+    schema: z.object({ accountId: id }),
+    fn: async (i, s) => {
+      const r = await app.accounts.logout(i.accountId);
+      app.history.audit('account.logout', { userId: s.user.id, entityType: 'account', entityId: i.accountId });
+      return r;
+    },
+  });
   on('accounts.disconnect', { perm: 'accounts.manage', schema: z.object({ accountId: id }), fn: (i) => app.accounts.disconnect(i.accountId) });
   on('accounts.syncTemplates', { perm: 'templates.manage', account: true, fn: async (_i, s) => ({ count: await app.accounts.syncTemplates(s.accountId) }) });
   on('accounts.webhookStatus', {

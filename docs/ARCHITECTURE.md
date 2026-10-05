@@ -10,7 +10,7 @@ y cómo se comunican los módulos. Todo lo descrito aquí está implementado en 
 | Plataforma | Electron + React + TypeScript | Instalador `.exe`, bandeja del sistema, notificaciones nativas y procesos en segundo plano sin navegador. |
 | Base de datos | SQLite (`better-sqlite3`, modo WAL) | Embebida, transaccional, sin servidor. v13 trae binarios N-API precompilados para Windows (no requiere compilar). |
 | Conector WhatsApp | **WhatsApp Business Platform – Cloud API (Meta)** detrás de la interfaz `WhatsAppProvider` | Es el mecanismo **oficial y autorizado**. |
-| Conexión por QR | **No implementada** | El emparejamiento por QR (WhatsApp Web) solo es posible con clientes no oficiales que violan los Términos de WhatsApp y exponen la cuenta a bloqueos. La interfaz soporta el estado `qr_required` para un futuro proveedor autorizado que lo ofrezca. |
+| Conexión por QR | **Opcional, no oficial** (`BaileysProvider`) | Añadida a petición del usuario, que no tiene acceso a la API oficial. Riesgo de bloqueo explicado en la UI y aceptación obligatoria (validada en el proceso principal y auditada). Credenciales de sesión cifradas en `baileys_auth`. Sin mecanismos de evasión: mismos límites, opt-out y lista negra, con valores por defecto más prudentes. Migración de esquema v2 reconstruye `whatsapp_accounts` con FKs verificadas. |
 | IA | Claude API (`@anthropic-ai/sdk`), opcional | Respuestas automáticas con instrucciones + base de conocimiento, con salida estructurada y derivación a humano. |
 | Procesos | Toda la lógica de negocio en el proceso *main*; la UI (renderer) es aislada (`contextIsolation`, `sandbox`, sin `nodeIntegration`) | Seguridad y estabilidad: los motores siguen funcionando con la ventana cerrada (bandeja). |
 

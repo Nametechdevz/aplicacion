@@ -27,6 +27,8 @@ export interface ConnectionInfo {
   displayName?: string | null;
   qualityRating?: string | null;
   qr?: string | null;
+  /** El gestor de cuentas no debe reintentar solo (requiere acción del usuario, ej. escanear QR). */
+  noAutoReconnect?: boolean;
 }
 
 export interface OutboundMedia {
@@ -126,10 +128,31 @@ export class ProviderError extends Error {
   }
 }
 
+/** Contacto sincronizado desde el proveedor (solo datos reales que el proveedor entrega). */
+export interface SyncedContact {
+  phone: string;
+  name: string | null; // nombre guardado en la agenda del teléfono
+  notify: string | null; // nombre de perfil puesto por el contacto
+}
+
+/** Mensaje histórico o enviado desde otro dispositivo (ej. el teléfono). */
+export interface ExternalMessage {
+  phone: string;
+  direction: 'in' | 'out';
+  providerMessageId: string;
+  timestamp: Date;
+  type: string;
+  text: string | null;
+  profileName?: string | null;
+}
+
 export interface ProviderEvents {
   status: (info: ConnectionInfo) => void;
   inbound: (msg: InboundMessage) => void;
   statusUpdate: (u: StatusUpdate) => void;
+  contacts: (list: SyncedContact[]) => void;
+  history: (list: ExternalMessage[]) => void;
+  outboundExternal: (msg: ExternalMessage) => void;
 }
 
 export abstract class WhatsAppProvider extends EventEmitter {
@@ -139,6 +162,10 @@ export abstract class WhatsAppProvider extends EventEmitter {
 
   abstract connect(): Promise<void>;
   abstract disconnect(): Promise<void>;
+  /** Libera recursos al cerrar la aplicación sin cambiar el estado guardado (para reconectar al reabrir). */
+  dispose(): void {
+    this.removeAllListeners();
+  }
   abstract sendMessage(msg: OutboundMessage): Promise<SendResult>;
   downloadMedia?(providerMediaId: string): Promise<{ data: Buffer; mimeType: string }>;
   listTemplates?(): Promise<ProviderTemplateInfo[]>;
@@ -150,7 +177,7 @@ export abstract class WhatsAppProvider extends EventEmitter {
   }
 
   protected setStatus(next: Partial<ConnectionInfo> & { status: ConnectionStatus }) {
-    this.info = { ...this.info, ...next };
+    this.info = { ...this.info, noAutoReconnect: false, qr: next.status === 'qr_required' ? this.info.qr : null, ...next };
     this.emit('status', this.getStatus());
   }
 

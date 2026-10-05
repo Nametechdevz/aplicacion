@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Check, Copy, ExternalLink, FlaskConical, Info, LogOut, MessageCircle, Plug, PlugZap, Plus, QrCode, RefreshCw, Send, ShieldCheck, Trash2, Unplug, WifiOff, X } from 'lucide-react';
+import { Check, Copy, ExternalLink, FlaskConical, Info, LogOut, MessageCircle, Plug, PlugZap, Plus, QrCode, RefreshCw, Send, ShieldAlert, ShieldCheck, Smartphone, Trash2, Unplug, WifiOff, X } from 'lucide-react';
 import type { WhatsAppAccount } from '@shared/types';
 import { call, useAppEvent, useQuery } from '../../lib/api';
 import { attempt, toast, useStore } from '../../lib/store';
@@ -75,7 +75,8 @@ function CloudFields({ f, setF, editing }: { f: CloudForm; setF: (f: CloudForm) 
 
 /** Asistente para agregar una cuenta (Cloud API oficial o simulador). */
 export function AddAccount({ onDone, onCancel }: { onDone: (a: WhatsAppAccount) => void; onCancel?: () => void }) {
-  const [provider, setProvider] = useState<'cloud_api' | 'simulator' | null>(null);
+  const [provider, setProvider] = useState<'cloud_api' | 'simulator' | 'baileys' | null>(null);
+  const [riskAccepted, setRiskAccepted] = useState(false);
   const [name, setName] = useState('Principal');
   const [f, setF] = useState<CloudForm>(emptyCloud);
   const [busy, setBusy] = useState(false);
@@ -83,12 +84,13 @@ export function AddAccount({ onDone, onCancel }: { onDone: (a: WhatsAppAccount) 
     setBusy(true);
     try {
       const config = provider === 'cloud_api' ? { ...f, wabaId: f.wabaId || '' } : undefined;
-      const a = await call<WhatsAppAccount>('accounts.create', { name, provider, config });
+      const a = await call<WhatsAppAccount>('accounts.create', { name, provider, config, riskAccepted: provider === 'baileys' ? riskAccepted : undefined });
       await useStore.getState().refreshAccounts();
       await useStore.getState().switchAccount(a.id);
       toast.success('Cuenta agregada', 'Conectando…');
       const c = await attempt(() => call<WhatsAppAccount>('accounts.connect', { accountId: a.id }));
       if (c?.status === 'connected') toast.success('🟢 WhatsApp conectado');
+      if (provider === 'baileys') window.location.hash = '#/settings/whatsapp';
       await useStore.getState().refreshAccounts();
       onDone(a);
     } catch (e: any) {
@@ -100,6 +102,21 @@ export function AddAccount({ onDone, onCancel }: { onDone: (a: WhatsAppAccount) 
   if (!provider)
     return (
       <div className="grid grid-cols-2 gap-4">
+        <button onClick={() => setProvider('baileys')} className="card group col-span-2 p-5 text-left transition hover:-translate-y-0.5 hover:border-amber-500/60">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400">
+              <QrCode className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-semibold">WhatsApp con código QR (no oficial)</p>
+              <p className="mt-1 text-sm text-muted">Vincule su WhatsApp o WhatsApp Business normal escaneando un QR, como en WhatsApp Web. No requiere cuenta de Meta. Sincroniza contactos e historial reciente.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge tone="amber">No oficial · riesgo de bloqueo</Badge>
+                <Badge>Sin API de Meta</Badge>
+              </div>
+            </div>
+          </div>
+        </button>
         <button onClick={() => setProvider('cloud_api')} className="card group p-5 text-left transition hover:-translate-y-0.5 hover:border-brand/60">
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
             <ShieldCheck className="h-6 w-6" />
@@ -121,7 +138,7 @@ export function AddAccount({ onDone, onCancel }: { onDone: (a: WhatsAppAccount) 
           </Badge>
         </button>
         <InfoBox tone="info" className="col-span-2" icon={<QrCode className="h-4 w-4" />}>
-          <b>¿Y la conexión por QR?</b> Vincular un teléfono escaneando un QR solo es posible con clientes no oficiales de WhatsApp Web, que incumplen los Términos de WhatsApp y exponen el número a bloqueos. Por eso esta aplicación usa la API oficial. La arquitectura (<code>WhatsAppProvider</code>) admite un proveedor con QR si en el futuro existe uno autorizado.
+          <b>¿QR o API oficial?</b> La conexión por QR usa el protocolo de WhatsApp Web (Baileys), que no está autorizado por WhatsApp: es cómoda, pero el número puede ser bloqueado, sobre todo si envía campañas. La Cloud API oficial no tiene ese riesgo. Puede usar ambas a la vez (varias cuentas).
         </InfoBox>
         {onCancel && (
           <div className="col-span-2 flex justify-end">
@@ -143,13 +160,31 @@ export function AddAccount({ onDone, onCancel }: { onDone: (a: WhatsAppAccount) 
           <WebhookHelp />
         </>
       )}
+      {provider === 'baileys' && (
+        <div className="space-y-4">
+          <InfoBox tone="warn" icon={<ShieldAlert className="h-4 w-4" />}>
+            <p className="font-medium">Antes de continuar, tenga en cuenta:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs leading-relaxed">
+              <li>Este conector no es oficial: usarlo incumple los Términos de WhatsApp y el número puede ser <b>bloqueado temporal o permanentemente</b>.</li>
+              <li>El riesgo aumenta mucho con envíos masivos o a personas que no lo tienen agendado. Escriba solo a quien aceptó recibir mensajes.</li>
+              <li>Se aplican límites de envío prudentes (6 mensajes/min, 150 al día); puede ajustarlos bajo su responsabilidad.</li>
+              <li>Puede dejar de funcionar si WhatsApp cambia su protocolo; habrá que actualizar la aplicación y quizá escanear el QR de nuevo.</li>
+              <li>La sesión se guarda cifrada en este equipo. Puede desvincularla desde aquí o desde el teléfono (Dispositivos vinculados).</li>
+            </ul>
+          </InfoBox>
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-amber-500" checked={riskAccepted} onChange={(e) => setRiskAccepted(e.target.checked)} />
+            Entiendo y acepto el riesgo de usar una conexión no oficial con mi número.
+          </label>
+        </div>
+      )}
       {provider === 'simulator' && <InfoBox tone="warn">El simulador no se comunica con WhatsApp. Úselo para validar flujos; para enviar mensajes reales agregue una cuenta de Cloud API.</InfoBox>}
       <div className="flex justify-between">
         <Button variant="ghost" onClick={() => setProvider(null)}>
           Atrás
         </Button>
-        <Button variant="primary" loading={busy} icon={<PlugZap className="h-4 w-4" />} onClick={create} disabled={!name.trim() || (provider === 'cloud_api' && (!f.phoneNumberId || !f.accessToken || !f.appSecret))}>
-          Conectar WhatsApp
+        <Button variant="primary" loading={busy} icon={<PlugZap className="h-4 w-4" />} onClick={create} disabled={!name.trim() || (provider === 'cloud_api' && (!f.phoneNumberId || !f.accessToken || !f.appSecret)) || (provider === 'baileys' && !riskAccepted)}>
+          {provider === 'baileys' ? 'Generar código QR' : 'Conectar WhatsApp'}
         </Button>
       </div>
     </div>
@@ -187,11 +222,11 @@ function Capabilities() {
   const rows: [string, boolean, string?][] = [
     ['Enviar texto, imágenes, videos y documentos', c.sendMedia],
     ['Enviar audio', c.sendAudio],
-    ['Plantillas aprobadas por WhatsApp', c.templates],
+    ['Plantillas aprobadas por WhatsApp', c.templates, 'Solo existen en la Cloud API oficial. Con esta conexión los mensajes se envían como texto o multimedia normal.'],
     ['Estados entregado / leído', c.readReceipts],
     ['Sincronizar agenda de contactos', c.contactSync, 'No disponible en la API oficial: los contactos se crean al recibir mensajes, por importación CSV o manualmente.'],
     ['Sincronizar etiquetas de WhatsApp Business', c.labelsSync, 'No disponible: use las etiquetas del CRM.'],
-    ['Historial previo a la conexión', c.historySync, 'No disponible: el historial se construye desde la conexión.'],
+    ['Historial reciente al vincular', c.historySync, 'No disponible: el historial se construye desde la conexión.'],
   ];
   return (
     <Card title="Capacidades de esta integración" subtitle="Lo que la conexión actual permite realmente">
@@ -249,6 +284,29 @@ function SimulatorPanel() {
   );
 }
 
+function QrPanel({ qr }: { qr: string }) {
+  return (
+    <div className="mb-5 flex items-center gap-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+      <img src={qr} alt="Código QR de WhatsApp" className="h-56 w-56 rounded-xl bg-white p-2" />
+      <div className="space-y-3 text-sm">
+        <p className="flex items-center gap-2 text-base font-semibold">
+          <Smartphone className="h-5 w-5 text-amber-400" /> Vincule su WhatsApp
+        </p>
+        <ol className="list-decimal space-y-1 pl-5 text-muted">
+          <li>Abra WhatsApp en su teléfono.</li>
+          <li>
+            Toque <b>Menú ⋮</b> o <b>Configuración</b> → <b>Dispositivos vinculados</b>.
+          </li>
+          <li>
+            Toque <b>Vincular un dispositivo</b> y escanee este código.
+          </li>
+        </ol>
+        <p className="text-xs text-muted">El código se renueva automáticamente cada pocos segundos. Si expira, pulse "Generar nuevo QR".</p>
+      </div>
+    </div>
+  );
+}
+
 function EditCredentials({ account, open, onClose }: { account: WhatsAppAccount; open: boolean; onClose: () => void }) {
   const [f, setF] = useState<CloudForm>(emptyCloud);
   const [meta, setMeta] = useState<any>(null);
@@ -301,9 +359,10 @@ function AccountCard({ a }: { a: WhatsAppAccount }) {
           <StatusDot status={a.status} /> {a.name} {a.id === accountId && <Badge tone="blue">Activa</Badge>}
         </span>
       }
-      subtitle={a.provider === 'cloud_api' ? 'WhatsApp Business Cloud API (oficial)' : 'Simulador (pruebas)'}
+      subtitle={a.provider === 'cloud_api' ? 'WhatsApp Business Cloud API (oficial)' : a.provider === 'baileys' ? 'WhatsApp por código QR (no oficial)' : 'Simulador (pruebas)'}
       actions={<Badge tone={st.tone} dot>{st.label}</Badge>}
     >
+      {a.status === 'qr_required' && a.qr && <QrPanel qr={a.qr} />}
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <div>
           <dt className="text-xs text-muted">Número conectado</dt>
@@ -335,15 +394,15 @@ function AccountCard({ a }: { a: WhatsAppAccount }) {
       </dl>
       <div className="mt-4 flex flex-wrap gap-2">
         {a.status !== 'connected' ? (
-          <Button variant="primary" size="sm" loading={busy === 'c'} icon={<Plug className="h-4 w-4" />} onClick={() => run('c', () => call('accounts.connect', { accountId: a.id }), '🟢 Conectado')}>
-            {a.last_connected_at ? 'Reconectar' : 'Conectar'}
+          <Button variant="primary" size="sm" loading={busy === 'c'} icon={a.provider === 'baileys' ? <QrCode className="h-4 w-4" /> : <Plug className="h-4 w-4" />} onClick={() => run('c', () => call('accounts.connect', { accountId: a.id }), a.provider === 'baileys' ? undefined : '🟢 Conectado')}>
+            {a.status === 'qr_required' ? 'Generar nuevo QR' : a.last_connected_at ? 'Reconectar' : a.provider === 'baileys' ? 'Conectar (mostrar QR)' : 'Conectar'}
           </Button>
         ) : (
           <Button size="sm" loading={busy === 'r'} icon={<RefreshCw className="h-4 w-4" />} onClick={() => run('r', () => call('accounts.connect', { accountId: a.id }), 'Conexión actualizada')}>
             Actualizar conexión
           </Button>
         )}
-        {a.status === 'connected' && a.id === accountId && can('templates.manage') && (
+        {a.status === 'connected' && a.id === accountId && a.provider === 'cloud_api' && can('templates.manage') && (
           <Button size="sm" loading={busy === 's'} icon={<RefreshCw className="h-4 w-4" />} onClick={() => run('s', async () => toast.success(`${(await call<{ count: number }>('accounts.syncTemplates')).count} plantillas sincronizadas`))}>
             Sincronizar plantillas
           </Button>
@@ -353,6 +412,16 @@ function AccountCard({ a }: { a: WhatsAppAccount }) {
             {a.status === 'connected' && (
               <Button size="sm" variant="ghost" loading={busy === 'd'} icon={<Unplug className="h-4 w-4" />} onClick={() => run('d', () => call('accounts.disconnect', { accountId: a.id }), 'Desconectado')}>
                 Desconectar
+              </Button>
+            )}
+            {a.provider === 'baileys' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<LogOut className="h-4 w-4" />}
+                onClick={async () => (await confirmDialog({ title: 'Cerrar sesión de WhatsApp', body: 'Se desvinculará este equipo de su WhatsApp y se borrará la sesión guardada. Para volver a usarlo tendrá que escanear el QR otra vez. Los contactos y conversaciones se conservan.', danger: true, confirmText: 'Cerrar sesión' })) && run('l', () => call('accounts.logout', { accountId: a.id }), 'Sesión cerrada')}
+              >
+                Cerrar sesión
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => setEdit(true)}>
@@ -415,7 +484,7 @@ export function WhatsAppSettings() {
       </div>
       <div className="grid grid-cols-2 gap-5">
         <Capabilities />
-        {current?.provider === 'simulator' ? <SimulatorPanel /> : current?.provider === 'cloud_api' ? <WebhookCard /> : null}
+        {current?.provider === 'simulator' ? <SimulatorPanel /> : current?.provider === 'cloud_api' ? <WebhookCard /> : current?.provider === 'baileys' ? <BaileysInfo /> : null}
       </div>
     </div>
   );
@@ -457,6 +526,20 @@ function WebhookCard() {
       <div className="mt-4">
         <WebhookHelp />
       </div>
+    </Card>
+  );
+}
+
+function BaileysInfo() {
+  return (
+    <Card title="Conexión por QR" subtitle="Buenas prácticas para reducir el riesgo de bloqueo">
+      <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted">
+        <li>Envíe campañas solo a contactos que aceptaron recibir mensajes y que tienen su número agendado.</li>
+        <li>Mantenga ritmos bajos (Configuración → Campañas y envíos). Un aumento brusco de envíos es la causa más común de bloqueo.</li>
+        <li>Respete las bajas: el opt-out y la lista negra se aplican igual que con la API oficial.</li>
+        <li>Su teléfono debe abrir WhatsApp de vez en cuando para que la sesión vinculada siga activa.</li>
+        <li>Los mensajes que envíe desde el teléfono también aparecen en la bandeja y activan el modo humano.</li>
+      </ul>
     </Card>
   );
 }

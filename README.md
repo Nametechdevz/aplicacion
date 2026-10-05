@@ -6,7 +6,8 @@ automatizaciones visuales, respuestas con IA, base de conocimiento, pipeline, ta
 estadísticas, multicuenta, multiusuario, backups y auto-actualización**.
 
 - Electron 44 + React 19 + TypeScript + SQLite (better-sqlite3, modo WAL).
-- Conexión **oficial** con WhatsApp mediante la **WhatsApp Business Platform – Cloud API** de Meta.
+- Conexión con WhatsApp mediante la **Cloud API oficial** de Meta **o** vinculando un teléfono por
+  **código QR** (Baileys, no oficial; ver riesgos en la sección 6).
 - Interfaz en español, tema oscuro por defecto (también claro).
 
 > Arquitectura detallada (decisiones, base de datos, cola, motores): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -37,7 +38,7 @@ estadísticas, multicuenta, multiusuario, backups y auto-actualización**.
 2. Elija la carpeta de instalación (el instalador crea acceso directo en el escritorio y en el menú Inicio).
 3. Al abrir por primera vez:
    - **Configuración inicial:** cree el usuario administrador.
-   - **Conectar WhatsApp:** elija *WhatsApp Business Cloud API* (oficial) o *Simulador (pruebas)*.
+   - **Conectar WhatsApp:** elija *WhatsApp con código QR* (no oficial), *WhatsApp Business Cloud API* (oficial) o *Simulador (pruebas)*.
 
 La desinstalación (Panel de control → Aplicaciones) **no borra sus datos**, que viven en
 `%APPDATA%\WhatsApp CRM\`.
@@ -57,7 +58,7 @@ Requisitos: **Node.js 22+** y npm.
 ```bash
 npm install          # better-sqlite3 v13 trae binarios N-API precompilados (no requiere compilar)
 npm run dev          # Vite (UI con recarga) + esbuild (main/preload) + Electron
-npm test             # 67 pruebas (vitest) de motores, cola, campañas, persistencia…
+npm test             # 74 pruebas (vitest) de motores, cola, campañas, persistencia…
 npm run typecheck    # TypeScript estricto
 npm run e2e          # recorrido de extremo a extremo con la app real (Linux: xvfb-run -a npm run e2e)
 ```
@@ -160,13 +161,33 @@ Se necesita una cuenta de **Meta Business** con WhatsApp Business Platform:
    *Verify token* = el que muestra la app. Suscríbase al campo **messages**.
 4. Cada POST se verifica con la firma `X-Hub-Signature-256` (App Secret); sin firma válida se rechaza.
 
-### ¿Por qué no hay conexión por QR?
-Vincular un teléfono por QR solo es posible con clientes no oficiales de WhatsApp Web, que
-**incumplen los Términos de WhatsApp** y exponen el número a bloqueos. Esta app usa solo la API
-oficial. La interfaz `WhatsAppProvider` (`src/main/whatsapp/provider.ts`) contempla el estado
-`qr_required`, de modo que un proveedor autorizado con QR podría agregarse sin reescribir el CRM.
+### Conector por código QR (Baileys, no oficial)
+Para quien no tiene acceso a la API oficial, la app puede vincular un WhatsApp o WhatsApp Business
+normal como **dispositivo vinculado** (igual que WhatsApp Web), usando la librería
+[Baileys](https://github.com/WhiskeySockets/Baileys) (`src/main/whatsapp/baileys.ts`).
+
+**Cómo conectar:** Configuración → WhatsApp → *Agregar cuenta* → *WhatsApp con código QR* →
+acepte el aviso de riesgo → *Generar código QR*. En el teléfono: WhatsApp → ⋮ / Configuración →
+*Dispositivos vinculados* → *Vincular un dispositivo* y escanee. La sesión queda guardada
+**cifrada** (tabla `baileys_auth`) y se reconecta sola al abrir la app; *Cerrar sesión* la
+desvincula y la borra.
+
+**Riesgos (léalos):** no es una integración autorizada por WhatsApp; su uso incumple sus Términos
+y el número puede ser **bloqueado**, sobre todo con envíos masivos o a personas que no lo tienen
+agendado. Puede dejar de funcionar si WhatsApp cambia el protocolo (habrá que actualizar la app).
+La app exige aceptar este riesgo (queda en el historial de auditoría) y **no incluye ningún
+mecanismo para evadir límites o controles anti-spam**: no oculta la automatización, no rota
+números ni simula escritura humana. Al contrario, aplica límites más prudentes por defecto
+(6 mensajes/min, 150/día, configurables), además de opt-out, lista negra y consentimiento.
+
+**Qué agrega frente a la API oficial:** sincroniza contactos de la agenda e historial reciente
+(sin disparar automatizaciones ni contar como no leídos), no tiene ventana de 24 h, y los mensajes
+que usted escribe desde el teléfono aparecen en el inbox (y activan el modo humano). No admite
+plantillas de Meta. Grupos y estados se ignoran.
 
 ### Lo que la API oficial NO permite (y la alternativa implementada)
+(Con el conector QR sí hay sincronización de contactos/historial y no aplica la ventana de 24 h.)
+
 | Capacidad | Disponible | Alternativa |
 |---|---|---|
 | Sincronizar agenda de contactos | No | Contactos creados al recibir mensajes (con el nombre de perfil), importación CSV, alta manual |
@@ -317,12 +338,12 @@ palabra clave (y por el error 131050 de Meta), lista negra, registro de consenti
 
 ## 13. Pruebas
 
-`npm test` (vitest, 67 pruebas) cubre: conexión/desconexión y pausa de campañas, contactos,
+`npm test` (vitest, 74 pruebas) cubre: conexión/desconexión y pausa de campañas, contactos,
 etiquetas, segmentos (incl. inyección SQL), campañas (flujo completo, exclusiones, pausa/reanudar/
 detener, programación, recurrencia, ventana de 24 h, respuestas), cola (idempotencia, ritmo,
 RATE_LIMIT, reintentos, errores permanentes, tope diario, recuperación tras cierre), multimedia,
 variables, automatizaciones (triggers, condiciones, acciones, modo humano, anti-bucle, horarios),
-importación/exportación, opt-out, lista negra, webhooks firmados, Cloud API, IA (con cliente
+importación/exportación, opt-out, lista negra, webhooks firmados, Cloud API, conector QR (Baileys con socket simulado: QR, sesión cifrada, LID, historial, cierre de sesión, reconexión) y migración de base de datos, IA (con cliente
 simulado), backup/restauración, usuarios y permisos, y **persistencia real cerrando y reabriendo la
 aplicación** con campañas programadas, en curso (sin duplicados) y pausadas.
 

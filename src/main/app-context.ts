@@ -87,7 +87,7 @@ export function createApp(opts: CreateAppOptions) {
   const importExport = new ImportExportService(ctx, contacts, tags, fields, settings, history);
   const stats = new StatsService(ctx, settings);
   const backup = new BackupService(ctx, settings, opts.appVersion ?? '1.0.0');
-  const accounts = new AccountManager(ctx, { conversations, templates, tags, tasks }, opts.providerFactory ?? defaultProviderFactory);
+  const accounts = new AccountManager(ctx, { conversations, templates, tags, tasks, contacts }, opts.providerFactory ?? defaultProviderFactory);
   const webhooks = new WebhookServer(ctx, accounts);
   const worker = new QueueWorker(ctx, {
     getProvider: (id) => accounts.getProvider(id),
@@ -142,7 +142,7 @@ export function createApp(opts: CreateAppOptions) {
     await ai.onInbound(e);
   });
   bus.on('contact.created', async (e) => {
-    if (e.source === 'import') return; // importaciones masivas no disparan mensajes automáticos (opción explícita: import_auto)
+    if (e.source === 'import' || e.source === 'whatsapp_sync') return; // importaciones masivas no disparan mensajes automáticos (opción explícita: import_auto)
     await automation.trigger({ type: 'contact_created', accountId: e.accountId, contactId: e.contactId, isNewContact: true });
   });
   bus.on('tag.added', async (e) => {

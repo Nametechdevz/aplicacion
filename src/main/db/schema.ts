@@ -4,7 +4,13 @@
  */
 const NOW = `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
 
-export const MIGRATIONS: string[] = [
+export interface Migration {
+  sql: string;
+  /** Desactiva claves foráneas durante la migración (necesario para reconstruir tablas). */
+  rebuildsTables?: boolean;
+}
+
+export const MIGRATIONS: (string | Migration)[] = [
   /* 1 — esquema inicial */ `
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
@@ -526,4 +532,36 @@ CREATE TABLE send_counters (
   PRIMARY KEY (account_id, day)
 );
 `,
+  /* 2 — conector Baileys (WhatsApp por QR): nuevo proveedor + sesión cifrada */ {
+    rebuildsTables: true,
+    sql: `
+CREATE TABLE whatsapp_accounts_new (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  provider TEXT NOT NULL CHECK (provider IN ('cloud_api','simulator','baileys')),
+  phone_number TEXT,
+  display_name TEXT,
+  config_encrypted TEXT,
+  webhook_key TEXT,
+  status TEXT NOT NULL DEFAULT 'disconnected',
+  status_detail TEXT,
+  quality_rating TEXT,
+  auto_connect INTEGER NOT NULL DEFAULT 1,
+  last_connected_at TEXT,
+  last_sync_at TEXT,
+  created_at TEXT NOT NULL DEFAULT ${NOW},
+  deleted_at TEXT
+);
+INSERT INTO whatsapp_accounts_new SELECT id, name, provider, phone_number, display_name, config_encrypted, webhook_key, status, status_detail, quality_rating, auto_connect, last_connected_at, last_sync_at, created_at, deleted_at FROM whatsapp_accounts;
+DROP TABLE whatsapp_accounts;
+ALTER TABLE whatsapp_accounts_new RENAME TO whatsapp_accounts;
+
+CREATE TABLE baileys_auth (
+  account_id INTEGER NOT NULL REFERENCES whatsapp_accounts(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (account_id, key)
+);
+`,
+  },
 ];

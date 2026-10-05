@@ -25,7 +25,7 @@ export function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wcrm-test-'));
 }
 
-export function makeEnv(opts: { dir?: string; clock?: ManualClock; memory?: boolean; aiClientFactory?: any; cloudFetch?: typeof fetch } = {}): TestEnv {
+export function makeEnv(opts: { dir?: string; clock?: ManualClock; memory?: boolean; aiClientFactory?: any; cloudFetch?: typeof fetch; providerFactory?: ProviderFactory } = {}): TestEnv {
   const dir = opts.dir ?? tmpDir();
   const clock = opts.clock ?? new ManualClock(new Date('2026-10-05T15:00:00.000Z').getTime());
   const sims = new Map<number, SimulatorProvider>();
@@ -42,7 +42,7 @@ export function makeEnv(opts: { dir?: string; clock?: ManualClock; memory?: bool
     clock,
     secrets: createSecretBox({ key: KEY }),
     providerFactory: (row) => {
-      const p = factory(row);
+      const p = opts.providerFactory && row.provider === 'baileys' ? opts.providerFactory(row) : factory(row);
       return p;
     },
     aiClientFactory: opts.aiClientFactory,

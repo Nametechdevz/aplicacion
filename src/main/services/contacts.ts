@@ -337,6 +337,33 @@ export class ContactService {
     return { contact: this.findByPhone(accountId, phoneE164)!, created: true };
   }
 
+  /**
+   * Contactos sincronizados desde WhatsApp (conector QR). Crea los que no existen y completa el
+   * nombre si estaba vacío; nunca sobrescribe datos editados en el CRM ni inventa información.
+   * Devuelve cuántos contactos se crearon o completaron.
+   */
+  upsertSynced(accountId: number, list: { phone: string; name: string | null; notify: string | null }[]): number {
+    const now = this.ctx.clock.now().toISOString();
+    const ins = this.ctx.db.prepare("INSERT OR IGNORE INTO contacts(account_id, name, phone, source, created_at, updated_at) VALUES (?,?,?,'whatsapp_sync',?,?)");
+    const fill = this.ctx.db.prepare("UPDATE contacts SET name = ?, updated_at = ? WHERE account_id = ? AND phone = ? AND (name IS NULL OR name = '')");
+    let n = 0;
+    const created: number[] = [];
+    this.ctx.db.transaction(() => {
+      for (const c of list) {
+        if (!/^\d{8,15}$/.test(c.phone)) continue;
+        const name = (c.name || c.notify || '').slice(0, 120) || null;
+        const r = ins.run(accountId, name, c.phone, now, now);
+        if (r.changes) {
+          n++;
+          created.push(Number(r.lastInsertRowid));
+        } else if (name && fill.run(name, now, accountId, c.phone).changes) n++;
+      }
+      for (const id of created) this.history.contactEvent(accountId, id, 'created', { source: 'whatsapp_sync' });
+    })();
+    for (const id of created) this.ctx.bus.emit('contact.created', { accountId, contactId: id, source: 'whatsapp_sync' });
+    return n;
+  }
+
   // ---- Notas ----
   addNote(accountId: number, contactId: number, body: string, actorId?: number | null) {
     this.get(accountId, contactId);

@@ -327,7 +327,7 @@ export function CampaignWizard() {
                   <p className="font-medium">Mensaje libre</p>
                   <p className="text-xs text-muted">{windowHours ? `Solo llega a quienes escribieron en las últimas ${windowHours} h.` : 'Texto con variables y multimedia.'}</p>
                 </button>
-                <button onClick={() => set({ message_type: 'template' })} className={cx('flex-1 rounded-xl border p-3 text-left text-sm', d.message_type === 'template' ? 'border-brand bg-brand/10' : 'border-line')}>
+                <button disabled={caps.data?.capabilities && !caps.data.capabilities.templates} title={caps.data?.capabilities && !caps.data.capabilities.templates ? 'Las plantillas de Meta solo existen en la Cloud API oficial' : undefined} onClick={() => set({ message_type: 'template' })} className={cx('flex-1 rounded-xl border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40', d.message_type === 'template' ? 'border-brand bg-brand/10' : 'border-line')}>
                   <p className="font-medium">Plantilla aprobada por WhatsApp</p>
                   <p className="text-xs text-muted">Necesaria para iniciar conversaciones (marketing / utilidad).</p>
                 </button>

@@ -1,7 +1,7 @@
 import type { Role, Permission } from './permissions';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'qr_required' | 'error';
-export type ProviderKind = 'cloud_api' | 'simulator';
+export type ProviderKind = 'cloud_api' | 'simulator' | 'baileys';
 
 export type MessageStatus = 'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled' | 'received';
 export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'template' | 'location' | 'contacts' | 'interactive' | 'reaction' | 'unknown';
@@ -163,7 +163,7 @@ export interface Message {
   type: MessageType;
   body: string | null;
   status: MessageStatus;
-  source: 'manual' | 'campaign' | 'automation' | 'ai' | 'scheduled' | 'system' | 'inbound';
+  source: 'manual' | 'campaign' | 'automation' | 'ai' | 'scheduled' | 'system' | 'inbound' | 'phone';
   provider_message_id: string | null;
   error_code: string | null;
   error_message: string | null;

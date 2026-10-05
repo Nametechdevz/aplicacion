@@ -4,11 +4,13 @@ import { randomId } from '../core/crypto';
 import type { ConnectionStatus, ProviderKind, WhatsAppAccount } from '../../shared/types';
 import { CloudApiProvider, type CloudApiConfig } from './cloud-api';
 import { SimulatorProvider } from './simulator';
+import { BaileysProvider, clearBaileysSession, hasBaileysSession } from './baileys';
 import { ProviderError, type WhatsAppProvider } from './provider';
 import type { ConversationService } from '../services/conversations';
 import type { TemplateService } from '../services/templates';
 import type { TagService } from '../services/tags';
 import type { TaskService } from '../services/tasks';
+import type { ContactService } from '../services/contacts';
 
 interface AccountRow {
   id: number;
@@ -27,10 +29,20 @@ interface AccountRow {
   created_at: string;
 }
 
-export type ProviderFactory = (row: { provider: ProviderKind; config: any }) => WhatsAppProvider;
+export type ProviderFactory = (row: { provider: ProviderKind; config: any; accountId: number; ctx: Ctx }) => WhatsAppProvider;
 
-export const defaultProviderFactory: ProviderFactory = ({ provider, config }) =>
-  provider === 'cloud_api' ? new CloudApiProvider(config as CloudApiConfig) : new SimulatorProvider(config ?? {});
+export const defaultProviderFactory: ProviderFactory = ({ provider, config, accountId, ctx }) => {
+  if (provider === 'cloud_api') return new CloudApiProvider(config as CloudApiConfig);
+  if (provider === 'baileys')
+    return new BaileysProvider({
+      accountId,
+      db: ctx.db,
+      secrets: ctx.secrets,
+      log: ctx.log,
+      getMessageBody: (pid) => (ctx.db.prepare("SELECT body FROM messages WHERE account_id = ? AND provider_message_id = ? AND direction = 'out'").get(accountId, pid) as { body: string | null } | undefined)?.body ?? null,
+    });
+  return new SimulatorProvider(config ?? {});
+};
 
 const HEALTH_INTERVAL_MS = 5 * 60000;
 const MAX_BACKOFF_MS = 10 * 60000;
@@ -48,7 +60,7 @@ export class AccountManager {
 
   constructor(
     private ctx: Ctx,
-    private deps: { conversations: ConversationService; templates: TemplateService; tags: TagService; tasks: TaskService },
+    private deps: { conversations: ConversationService; templates: TemplateService; tags: TagService; tasks: TaskService; contacts: ContactService },
     private factory: ProviderFactory = defaultProviderFactory,
   ) {}
 
@@ -102,7 +114,7 @@ export class AccountManager {
     const p = this.providers.get(id);
     if (p) return p.capabilities.customerServiceWindowHours;
     const r = this.ctx.db.prepare('SELECT provider FROM whatsapp_accounts WHERE id = ?').get(id) as { provider: ProviderKind } | undefined;
-    return r?.provider === 'simulator' ? null : 24;
+    return r?.provider === 'cloud_api' ? 24 : null;
   }
 
   capabilities(id: number) {
@@ -140,7 +152,7 @@ export class AccountManager {
   create(input: { name: string; provider: ProviderKind; config?: Partial<CloudApiConfig> }): WhatsAppAccount {
     const name = input.name?.trim();
     if (!name) throw invalid('Ponga un nombre a la cuenta (ej. "Ventas").');
-    if (!['cloud_api', 'simulator'].includes(input.provider)) throw invalid('Proveedor no soportado.');
+    if (!['cloud_api', 'simulator', 'baileys'].includes(input.provider)) throw invalid('Proveedor no soportado.');
     let enc: string | null = null;
     if (input.provider === 'cloud_api') {
       const cfg = this.validateCloudConfig(input.config ?? {}, null);
@@ -152,6 +164,12 @@ export class AccountManager {
     const id = Number(r.lastInsertRowid);
     this.deps.tags.ensureSystemTags(id, true);
     this.deps.tasks.ensureDefaultPipeline(id);
+    if (input.provider === 'baileys') {
+      // Valores de envío más prudentes para el conector no oficial (el usuario puede cambiarlos).
+      this.ctx.db
+        .prepare("INSERT INTO settings(scope, key, value) VALUES (?, 'sending', ?) ON CONFLICT(scope, key) DO NOTHING")
+        .run(`account:${id}`, JSON.stringify({ ratePerMinute: 6, dailyCap: 150, maxAttempts: 3, retryBaseSeconds: 60, rateLimitPauseSeconds: 300, missedScheduleGraceHours: 6, confirmThreshold: 20, maxRecipientsPerRun: 500 }));
+    }
     this.ctx.log.info('whatsapp', `Cuenta ${id} creada (${input.provider})`);
     return this.get(id);
   }
@@ -202,8 +220,11 @@ export class AccountManager {
 
   async remove(id: number) {
     this.row(id);
-    await this.disconnect(id);
+    const p = this.providers.get(id);
+    if (p instanceof BaileysProvider) await p.logout();
+    else await this.disconnect(id);
     this.providers.delete(id);
+    clearBaileysSession(this.ctx.db, id);
     this.ctx.db.prepare('UPDATE whatsapp_accounts SET deleted_at = ?, config_encrypted = NULL, status = ? WHERE id = ?').run(this.ctx.clock.now().toISOString(), 'disconnected', id);
   }
 
@@ -215,10 +236,11 @@ export class AccountManager {
       throw new AppError('SECRETS', 'No se pudieron descifrar las credenciales en este equipo. Vuelva a ingresarlas en Configuración → WhatsApp.');
     }
     if (r.provider === 'cloud_api' && !cfg) throw new AppError('NO_CREDENTIALS', 'Configure las credenciales de la Cloud API.');
-    return this.factory({ provider: r.provider, config: cfg });
+    return this.factory({ provider: r.provider, config: cfg, accountId: r.id, ctx: this.ctx });
   }
 
   private attach(id: number, p: WhatsAppProvider) {
+    let lastQr: string | null = null;
     p.on('status', (info) => {
       const prev = (this.ctx.db.prepare('SELECT status FROM whatsapp_accounts WHERE id = ?').get(id) as { status: string } | undefined)?.status ?? 'disconnected';
       const now = this.ctx.clock.now().toISOString();
@@ -226,16 +248,41 @@ export class AccountManager {
         .prepare(`UPDATE whatsapp_accounts SET status = ?, status_detail = ?, phone_number = COALESCE(?, phone_number), display_name = COALESCE(?, display_name), quality_rating = COALESCE(?, quality_rating),
                   last_connected_at = CASE WHEN ? = 'connected' THEN ? ELSE last_connected_at END, last_sync_at = CASE WHEN ? = 'connected' THEN ? ELSE last_sync_at END WHERE id = ?`)
         .run(info.status, info.detail ?? null, info.phoneNumber ?? null, info.displayName ?? null, info.qualityRating ?? null, info.status, now, info.status, now, id);
-      if (prev !== info.status) {
+      if (prev !== info.status || (info.status === 'qr_required' && info.qr !== lastQr)) {
+        lastQr = info.qr ?? null;
         this.ctx.log.info('whatsapp', `Cuenta ${id}: ${prev} → ${info.status}${info.detail ? ` (${info.detail})` : ''}`);
         this.ctx.bus.emit('account.status', { accountId: id, status: info.status, previous: prev, detail: info.detail });
       }
       if (info.status === 'connected') this.backoff.delete(id);
-      if ((info.status === 'disconnected' || info.status === 'error') && !this.manualDisconnect.has(id) && info.status !== 'error') this.scheduleReconnect(id);
+      if (info.status === 'disconnected' && !info.noAutoReconnect && !this.manualDisconnect.has(id)) this.scheduleReconnect(id);
     });
     p.on('inbound', (msg) => {
       void this.deps.conversations.ingestInbound(id, msg, p).catch((e) => this.ctx.log.error('whatsapp', 'Error procesando mensaje entrante', e));
       this.touchSync(id);
+    });
+    p.on('contacts', (list) => {
+      try {
+        const n = this.deps.contacts.upsertSynced(id, list);
+        if (n) this.ctx.log.info('whatsapp', `Cuenta ${id}: ${n} contacto(s) sincronizados desde WhatsApp`);
+        this.touchSync(id);
+      } catch (e) {
+        this.ctx.log.error('whatsapp', 'Error sincronizando contactos', e);
+      }
+    });
+    p.on('history', (list) => {
+      try {
+        const n = this.deps.conversations.ingestHistory(id, list);
+        if (n) this.ctx.log.info('whatsapp', `Cuenta ${id}: ${n} mensaje(s) de historial importados`);
+      } catch (e) {
+        this.ctx.log.error('whatsapp', 'Error importando historial', e);
+      }
+    });
+    p.on('outboundExternal', (m) => {
+      try {
+        this.deps.conversations.ingestOutboundExternal(id, m);
+      } catch (e) {
+        this.ctx.log.error('whatsapp', 'Error registrando mensaje enviado desde el teléfono', e);
+      }
     });
     p.on('statusUpdate', (u) => {
       try {
@@ -314,7 +361,8 @@ export class AccountManager {
   async startAll() {
     for (const r of this.rows()) {
       this.deps.tags.ensureSystemTags(r.id);
-      if (!r.auto_connect || !r.config_encrypted && r.provider === 'cloud_api') continue;
+      if (!r.auto_connect || (!r.config_encrypted && r.provider === 'cloud_api')) continue;
+      if (r.provider === 'baileys' && !hasBaileysSession(this.ctx.db, r.id)) continue; // sin vincular: el usuario genera el QR
       if (r.status === 'disconnected' && r.status_detail === 'Desconectado por el usuario.') continue;
       this.connect(r.id).catch((e) => {
         this.ctx.log.warn('whatsapp', `No se pudo conectar la cuenta ${r.id} al iniciar: ${e?.message}`);
@@ -333,6 +381,19 @@ export class AccountManager {
         });
       }
     }
+  }
+
+  /** Desvincula el dispositivo (solo conector QR) y borra la sesión guardada. */
+  async logout(id: number) {
+    this.row(id);
+    const p = this.providers.get(id);
+    if (p instanceof BaileysProvider) await p.logout();
+    else clearBaileysSession(this.ctx.db, id);
+    return this.get(id);
+  }
+
+  hasSession(id: number) {
+    return hasBaileysSession(this.ctx.db, id);
   }
 
   async syncTemplates(id: number) {
@@ -381,5 +442,6 @@ export class AccountManager {
   shutdown() {
     if (this.healthTimer) clearInterval(this.healthTimer);
     for (const id of this.reconnectTimers.keys()) this.clearReconnect(id);
+    for (const p of this.providers.values()) p.dispose();
   }
 }

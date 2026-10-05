@@ -143,6 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     {STATUS_LABEL[acc?.status ?? 'disconnected']}
                     {acc?.phone_number ? ` · +${acc.phone_number}` : ''}
                   </span>
+                  {acc?.provider === 'baileys' && <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-300">QR</span>}
                   {acc?.provider === 'simulator' && <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700 dark:text-violet-300">Simulador</span>}
                   <ChevronDown className="h-4 w-4 text-muted" />
                 </button>
@@ -151,7 +152,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ...accounts.map((a) => ({
                   label: (
                     <span className="flex items-center gap-2">
-                      <StatusDot status={a.status} /> {a.name} <span className="text-xs text-muted">{a.phone_number ? '+' + a.phone_number : a.provider === 'simulator' ? 'simulador' : ''}</span>
+                      <StatusDot status={a.status} /> {a.name} <span className="text-xs text-muted">{a.phone_number ? '+' + a.phone_number : a.provider === 'simulator' ? 'simulador' : a.provider === 'baileys' ? 'QR' : ''}</span>
                     </span>
                   ),
                   onClick: async () => {
@@ -172,6 +173,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           <div className="flex-1" />
         </header>
+        {acc?.status === 'qr_required' && (
+          <div className="flex items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-sm">
+            <span className="font-medium">📱 Vincule su WhatsApp: escanee el código QR para conectar "{acc.name}".</span>
+            <Button size="sm" variant="subtle" onClick={() => nav('/settings/whatsapp')}>
+              Ver código QR
+            </Button>
+          </div>
+        )}
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
       <ChangePassword open={pwOpen} onClose={() => setPwOpen(false)} />

@@ -124,7 +124,7 @@ function StatusTick({ m }: { m: Message }) {
   return <AlertCircle className="h-3.5 w-3.5 text-red-300" aria-label={title} />;
 }
 
-const SOURCE_LABEL: Record<string, string> = { campaign: 'Campaña', automation: 'Automatización', ai: 'IA', scheduled: 'Programado', system: 'Sistema' };
+const SOURCE_LABEL: Record<string, string> = { campaign: 'Campaña', automation: 'Automatización', ai: 'IA', scheduled: 'Programado', system: 'Sistema', phone: 'Desde el teléfono' };
 
 function ConversationView({ conversationId }: { conversationId: number }) {
   const { can } = useStore();

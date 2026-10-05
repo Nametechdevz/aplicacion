@@ -34,6 +34,15 @@ try {
   step('Onboarding: conectar cuenta (simulador)');
   await page.getByText('Conectar WhatsApp').first().waitFor();
   await shot('02-onboarding');
+  // Opción QR (Baileys): exige aceptar el riesgo antes de generar el código
+  await page.getByText('WhatsApp con código QR (no oficial)').click();
+  const qrBtn = page.getByRole('button', { name: 'Generar código QR' });
+  await qrBtn.waitFor();
+  if (await qrBtn.isEnabled()) throw new Error('El botón de QR debería estar deshabilitado sin aceptar el riesgo');
+  await page.getByText('Entiendo y acepto el riesgo').click();
+  if (!(await qrBtn.isEnabled())) throw new Error('El botón de QR debería habilitarse tras aceptar el riesgo');
+  await shot('02b-onboarding-qr');
+  await page.getByRole('button', { name: 'Atrás' }).click();
   await page.getByText('Simulador (pruebas)').click();
   await page.getByRole('button', { name: 'Conectar WhatsApp' }).click();
 

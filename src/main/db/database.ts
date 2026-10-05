@@ -34,10 +34,23 @@ export function migrate(db: DB, opts?: OpenOptions) {
     fs.copyFileSync(opts.file, target);
   }
   for (let v = current; v < MIGRATIONS.length; v++) {
-    db.transaction(() => {
-      db.exec(MIGRATIONS[v]);
-      db.pragma(`user_version = ${v + 1}`);
-    })();
+    const m = MIGRATIONS[v];
+    const sql = typeof m === 'string' ? m : m.sql;
+    const rebuild = typeof m !== 'string' && m.rebuildsTables;
+    // Reconstruir una tabla referenciada exige desactivar las claves foráneas (fuera de la transacción).
+    if (rebuild) db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        db.exec(sql);
+        if (rebuild) {
+          const broken = db.pragma('foreign_key_check') as unknown[];
+          if (broken.length) throw new Error(`La migración ${v + 1} dejó ${broken.length} referencias inválidas`);
+        }
+        db.pragma(`user_version = ${v + 1}`);
+      })();
+    } finally {
+      if (rebuild) db.pragma('foreign_keys = ON');
+    }
   }
 }
 

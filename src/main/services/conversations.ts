@@ -3,7 +3,7 @@ import { notFound } from '../core/errors';
 import { inList } from '../db/database';
 import type { Conversation, Message, MessageStatus } from '../../shared/types';
 import { truncate } from '../../shared/text';
-import type { InboundMessage, StatusUpdate, WhatsAppProvider } from '../whatsapp/provider';
+import type { ExternalMessage, InboundMessage, StatusUpdate, WhatsAppProvider } from '../whatsapp/provider';
 import type { ContactService } from './contacts';
 import type { TagService } from './tags';
 import type { MediaService } from './media';
@@ -196,6 +196,52 @@ export class ConversationService {
       }
     }
     return messageId;
+  }
+
+  /**
+   * Historial reciente entregado por el conector (ej. al vincular por QR). Se guarda como
+   * historial: no dispara automatizaciones, IA ni notificaciones, y no marca como no leído.
+   */
+  ingestHistory(accountId: number, list: ExternalMessage[]): number {
+    const db = this.ctx.db;
+    let n = 0;
+    const touched = new Set<number>();
+    db.transaction(() => {
+      for (const m of [...list].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())) {
+        if (db.prepare('SELECT 1 FROM messages WHERE account_id = ? AND provider_message_id = ?').get(accountId, m.providerMessageId)) continue;
+        const { contact } = this.contacts.findOrCreateInbound(accountId, m.phone, m.direction === 'in' ? m.profileName ?? null : null);
+        const convId = this.ensureConversation(accountId, contact.id);
+        const at = m.timestamp.toISOString();
+        db.prepare(`INSERT INTO messages(account_id, conversation_id, contact_id, direction, type, body, status, source, provider_message_id, created_at, sent_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(accountId, convId, contact.id, m.direction, m.type, m.text, m.direction === 'in' ? 'received' : 'sent', m.direction === 'in' ? 'inbound' : 'phone', m.providerMessageId, at, m.direction === 'out' ? at : null);
+        const pv = previewOf(m.type, m.text);
+        db.prepare(`UPDATE conversations SET last_message_at = ?, last_message_preview = ?, last_direction = ? WHERE id = ? AND (last_message_at IS NULL OR last_message_at < ?)`).run(at, pv, m.direction, convId, at);
+        db.prepare(`UPDATE contacts SET last_message_at = ?, last_message_preview = ? WHERE id = ? AND (last_message_at IS NULL OR last_message_at < ?)`).run(at, pv, contact.id, at);
+        if (m.direction === 'in') db.prepare('UPDATE contacts SET last_inbound_at = ? WHERE id = ? AND (last_inbound_at IS NULL OR last_inbound_at < ?)').run(at, contact.id, at);
+        touched.add(convId);
+        n++;
+      }
+    })();
+    for (const c of touched) this.ctx.bus.emit('conversation.updated', { accountId, conversationId: c });
+    return n;
+  }
+
+  /** Mensaje enviado desde el teléfono u otro dispositivo: queda en la conversación y activa el modo humano. */
+  ingestOutboundExternal(accountId: number, m: ExternalMessage): number | null {
+    const db = this.ctx.db;
+    if (db.prepare('SELECT 1 FROM messages WHERE account_id = ? AND provider_message_id = ?').get(accountId, m.providerMessageId)) return null;
+    const { contact } = this.contacts.findOrCreateInbound(accountId, m.phone, null);
+    const convId = this.ensureConversation(accountId, contact.id);
+    const at = m.timestamp.toISOString();
+    const id = Number(
+      db.prepare(`INSERT INTO messages(account_id, conversation_id, contact_id, direction, type, body, status, source, provider_message_id, created_at, sent_at)
+                  VALUES (?,?,?,'out',?,?,'sent','phone',?,?,?)`).run(accountId, convId, contact.id, m.type, m.text, m.providerMessageId, at, at).lastInsertRowid,
+    );
+    this.touchOutbound(accountId, convId, contact.id, m.type, m.text);
+    this.onAgentMessage(accountId, convId);
+    this.flushPendingStatus(m.providerMessageId);
+    this.ctx.bus.emit('conversation.updated', { accountId, conversationId: convId });
+    return id;
   }
 
   /** Aplica un estado (sent/delivered/read/failed) reportado por el proveedor. Nunca retrocede de estado. */
