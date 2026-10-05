@@ -100,6 +100,23 @@ jobs:
           "-Pwebpro.vlc.args=--aout=dummy;--verbose=2"
       - name: Build installers
         run: ./gradlew packageExe packageMsi --no-daemon --stacktrace
+      - name: Smoke test - install the MSI and launch the app
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          $msi = Get-ChildItem build\compose\binaries\main\msi\*.msi | Select-Object -First 1
+          Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart /l*v msi-install.log" -Wait
+          $exe = Get-ChildItem "$env:ProgramFiles\WEBPRO PLAYER" -Filter "WEBPRO PLAYER.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { Get-Content msi-install.log -Tail 50; throw "Installed executable not found" }
+          Write-Host "Installed at $($exe.FullName)"
+          if (-not (Test-Path "$($exe.DirectoryName)\app\resources\vlc\libvlc.dll")) {
+            Get-ChildItem -Recurse "$($exe.DirectoryName)" -Filter libvlc.dll | Format-Table FullName
+          }
+          $p = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 25
+          if ($p.HasExited) { throw "WEBPRO PLAYER exited during startup (code $($p.ExitCode))" }
+          Write-Host "WEBPRO PLAYER is running (PID $($p.Id))"
+          Stop-Process -Id $p.Id -Force
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
