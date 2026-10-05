@@ -362,9 +362,11 @@ class PlayerManager(
             )
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(LOADER_RETRIES))
+        // Hardware decoders first; the bundled FFmpeg extension takes over the audio codecs
+        // many devices lack (AC3, E-AC3, DTS, MP2...), so IPTV channels never play silent.
         val renderers = DefaultRenderersFactory(appContext)
             .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(MIN_BUFFER_MS, MAX_BUFFER_MS, BUFFER_FOR_PLAYBACK_MS, BUFFER_AFTER_REBUFFER_MS)
             .build()

@@ -1,0 +1,41 @@
+name: Android
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "desktop/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Unit tests + APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Build release APK and AAB (unsigned unless keystore.properties exists)
+        run: ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
+      - name: Upload APK / AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: WEBPRO-PLAYER-Android
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: app/build/reports/tests

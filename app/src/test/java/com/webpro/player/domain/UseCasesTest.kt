@@ -18,6 +18,7 @@ import com.webpro.player.domain.usecase.FieldError
 import com.webpro.player.domain.usecase.LoginResult
 import com.webpro.player.domain.usecase.LoginUseCase
 import com.webpro.player.domain.usecase.SearchContentUseCase
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -75,6 +76,7 @@ private class FakeSession : SessionRepository {
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class UseCasesTest {
 
     @Test

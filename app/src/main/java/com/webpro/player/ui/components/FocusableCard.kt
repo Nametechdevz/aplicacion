@@ -7,8 +7,10 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +27,8 @@ import androidx.compose.ui.zIndex
 
 /**
  * Clickable container that works with touch and with a TV remote: it is focusable,
- * reacts to DPAD_CENTER/ENTER and shows a scale + border highlight when focused.
+ * reacts to DPAD_CENTER/ENTER and shows a scale + border highlight when focused
+ * (or hovered with a mouse).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -40,7 +43,9 @@ fun FocusableCard(
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val focused by interactionSource.collectIsFocusedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val focused = isFocused || isHovered
     val scale by animateFloatAsState(if (focused) focusedScale else 1f, label = "cardScale")
     val borderColor by animateColorAsState(
         if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -60,6 +65,7 @@ fun FocusableCard(
             .clip(shape)
             .background(background)
             .border(2.dp, borderColor, shape)
+            .hoverable(interactionSource)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,

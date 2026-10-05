@@ -1,0 +1,122 @@
+name: Windows desktop
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+    paths-ignore: ["**.md"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  VLC_VERSION: "3.0.21"
+
+jobs:
+  desktop-tests:
+    name: Tests (shared logic, UI render, real libVLC playback)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install libVLC and ffmpeg
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libvlc5 libvlccore9 vlc-plugin-base ffmpeg
+          mkdir -p "$RUNNER_TEMP/vlc"
+          ln -sf /usr/lib/x86_64-linux-gnu/libvlc.so.5 "$RUNNER_TEMP/vlc/libvlc.so"
+          ln -sf /usr/lib/x86_64-linux-gnu/libvlccore.so.9 "$RUNNER_TEMP/vlc/libvlccore.so"
+      - name: Generate test media
+        run: ./scripts/generate-test-media.sh "$RUNNER_TEMP/media"
+      - name: Run tests
+        run: >
+          ./gradlew test --no-daemon --stacktrace
+          -Pwebpro.test.media="$RUNNER_TEMP/media"
+          -Pwebpro.vlcDir="$RUNNER_TEMP/vlc"
+          "-Pwebpro.vlc.args=--aout=dummy"
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-screenshots
+          path: desktop/build/screenshots
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-test-reports
+          path: desktop/build/reports/tests
+
+  windows-installer:
+    name: Windows installer (.exe / .msi)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Download libVLC ${{ env.VLC_VERSION }} (64-bit)
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          $zip = "$env:RUNNER_TEMP\vlc.zip"
+          Invoke-WebRequest -Uri "https://download.videolan.org/pub/videolan/vlc/$env:VLC_VERSION/win64/vlc-$env:VLC_VERSION-win64.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\vlc-extract" -Force
+          $src = "$env:RUNNER_TEMP\vlc-extract\vlc-$env:VLC_VERSION"
+          $dst = "resources\windows\vlc"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item "$src\libvlc.dll", "$src\libvlccore.dll" -Destination $dst
+          Copy-Item "$src\plugins" -Destination $dst -Recurse
+          # Not needed by an embedded player: Qt/skins interfaces, visualizations, Lua extensions.
+          Remove-Item -Recurse -Force "$dst\plugins\gui", "$dst\plugins\visualization", "$dst\plugins\lua" -ErrorAction SilentlyContinue
+          Remove-Item -Force "$dst\plugins\plugins.dat" -ErrorAction SilentlyContinue
+          & "$src\vlc-cache-gen.exe" "$dst\plugins"
+          Get-ChildItem $dst | Format-Table Name, Length
+      - name: Install ffmpeg (test media)
+        shell: pwsh
+        run: choco install ffmpeg -y --no-progress
+      - name: Generate test media
+        run: ./scripts/generate-test-media.sh "$RUNNER_TEMP/media"
+      - name: Playback tests with the bundled libVLC
+        run: >
+          ./gradlew test --no-daemon --tests "*VlcPlaybackIntegrationTest*" --tests "*PlaybackLogicTest*" --tests "*DesktopStorageTest*"
+          -Pwebpro.test.media="$RUNNER_TEMP/media"
+          -Pwebpro.vlcDir="$GITHUB_WORKSPACE/desktop/resources/windows/vlc"
+          "-Pwebpro.vlc.args=--aout=dummy"
+      - name: Build installers
+        run: ./gradlew packageExe packageMsi --no-daemon --stacktrace
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: WEBPRO-PLAYER-Windows
+          path: |
+            desktop/build/compose/binaries/main/exe/*.exe
+            desktop/build/compose/binaries/main/msi/*.msi
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-reports
+          path: desktop/build/reports/tests
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/build/compose/binaries/main/exe/*.exe
+            desktop/build/compose/binaries/main/msi/*.msi

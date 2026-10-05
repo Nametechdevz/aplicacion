@@ -1,0 +1,12 @@
+WEBPRO PLAYER - Third-party software
+====================================
+
+This application bundles libVLC (VLC media player 3.x engine) from the VideoLAN project.
+libVLC is licensed under the GNU Lesser General Public License, version 2.1 or later.
+Source code and license: https://www.videolan.org/vlc/  -  https://code.videolan.org/videolan/vlc
+
+vlcj (Java bindings for libVLC) by Caprica Software is used under the GNU General Public
+License v3 / commercial license terms: https://github.com/caprica/vlcj
+
+Other components: Kotlin, Compose Multiplatform (Apache 2.0), OkHttp and Retrofit (Apache 2.0),
+kotlinx.serialization and kotlinx.coroutines (Apache 2.0), JNA (Apache 2.0 / LGPL 2.1).

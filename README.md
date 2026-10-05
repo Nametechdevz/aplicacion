@@ -1,6 +1,6 @@
 # WEBPRO PLAYER
 
-Reproductor IPTV nativo para **Android (teléfonos y tablets), Android TV y Google TV**, compatible con
+Reproductor IPTV nativo para **Android (teléfonos y tablets), Android TV, Google TV y Windows**, compatible con
 servicios que exponen la **API Xtream Codes**. La aplicación **no incluye** servidores, listas, canales
 ni credenciales: cada usuario introduce los datos de su propio proveedor.
 
@@ -24,7 +24,7 @@ ni credenciales: cada usuario introduce los datos de su propio proveedor.
 | Kotlin | 2.1.20 |
 | Dispositivo | Android 6.0 (API 23) o superior · Android TV / Google TV |
 
-Versiones de librerías (ver `gradle/libs.versions.toml`): Compose BOM 2025.02.00, Media3 1.6.0,
+Versiones de librerías (ver `gradle/libs.versions.toml`): Compose BOM 2025.02.00, Media3 1.5.0 (+ decodificador FFmpeg de audio),
 Navigation 2.8.9, Lifecycle 2.8.7, DataStore 1.1.3, Retrofit 2.11.0, OkHttp 4.12.0,
 kotlinx.serialization 1.8.0, Coroutines 1.10.1, Coil 2.7.0.
 
@@ -225,7 +225,69 @@ trazas técnicas, solo mensajes comprensibles con botones *Reintentar* / *Volver
 ./gradlew testDebugUnitTest
 ```
 
-## 12. Aviso
+## 12. Versión para Windows (`desktop/`)
+
+Aplicación de escritorio nativa (no es un emulador ni una web) con instalador **.exe** y **.msi**.
+
+- **Misma lógica que Android**: el cliente Xtream, los parsers tolerantes, la caché, el login, la búsqueda,
+  los modelos del reproductor y el tema visual se compilan directamente desde `app/src/main/java`.
+- **Motor de reproducción: libVLC 3 (el de VLC)** a través de vlcj, incluido dentro del instalador
+  (el usuario no instala nada más). Reproduce prácticamente todo lo que envían los servidores IPTV:
+  MPEG-TS, HLS, MKV, MP4, AVI… con audio **AAC, AC3, E-AC3 (Dolby Digital Plus), DTS, MP2, MP3**,
+  subtítulos y varias pistas de audio.
+- **Optimizado para IPTV**: decodificación por GPU (D3D11/DXVA2) con fallback automático a software,
+  desentrelazado automático (canales 1080i/576i), búfer de red configurable, reconexión HTTP, fotogramas
+  tardíos descartados para mantener audio y vídeo sincronizados.
+- **Vídeo sin bloqueos**: los fotogramas se copian desde VLC a un pool de búferes y se pintan con la GPU de
+  Compose/Skia; las llamadas nativas a VLC van por un hilo dedicado, así la interfaz nunca se congela.
+  Se recorta el relleno del decodificador y se respeta la relación de aspecto real (incl. anamórfico).
+- **Gestor único (`DesktopPlayerManager`)** con las mismas garantías que en Android: un solo reproductor,
+  eventos obsoletos descartados, zapping con debounce, reintentos 500 ms → 1 s → 2 s → 4 s, cambio
+  automático HLS ↔ TS, detección de canal congelado y **diagnóstico HTTP** de cada fallo
+  (401/403 sin reintentos, 404 prueba otro formato, 5xx reintenta). Si se cae Internet, la reproducción se
+  reanuda sola al volver la conexión.
+- **Controles**: ratón (clic = pausa, doble clic = pantalla completa, rueda = volumen), barra de progreso,
+  volumen hasta 150 %, selector de **pista de audio** y **subtítulos**, formato de imagen (ajustar, zoom,
+  estirar, 16:9, 4:3), lista de canales, episodio anterior/siguiente.
+- **Atajos de teclado**: `Espacio`/`K` pausa · `←`/`→` ±10 s (`Ctrl` ±60 s) · `↑`/`↓` volumen ·
+  `RePág`/`AvPág` canal o episodio · `L` lista de canales · `M` silencio · `F`/`F11` pantalla completa ·
+  `A` formato de imagen · `Esc` salir.
+- **Seguridad**: la contraseña se cifra con **DPAPI** (ligada a tu cuenta de Windows) en
+  `%APPDATA%\WEBPRO PLAYER`; favoritos, historial y ajustes se guardan en el mismo directorio.
+
+### Obtener el instalador
+
+**Automático (recomendado)**: cada `push` ejecuta el workflow *Windows desktop* de GitHub Actions, que
+descarga libVLC 3.0.21 de VideoLAN, ejecuta las pruebas de reproducción con ese VLC en Windows y genera
+`WEBPRO PLAYER-1.0.0.exe` y `.msi` como *artifacts*. Al crear una etiqueta `v1.0.0` se publican además en
+*Releases*.
+
+**Manual (en un PC con Windows 10/11 de 64 bits)**:
+
+1. Instala JDK 17 o superior (por ejemplo Temurin).
+2. Descarga `vlc-3.0.21-win64.zip` de https://download.videolan.org/pub/videolan/vlc/3.0.21/win64/ y copia
+   `libvlc.dll`, `libvlccore.dll` y la carpeta `plugins` en `desktop/resources/windows/vlc/`.
+3. En la carpeta `desktop/`:
+
+```bat
+gradlew.bat run            :: ejecutar en modo desarrollo
+gradlew.bat packageExe     :: instalador .exe  -> desktop\build\compose\binaries\main\exe\
+gradlew.bat packageMsi     :: instalador .msi  -> desktop\build\compose\binaries\main\msi\
+gradlew.bat test           :: pruebas
+```
+
+Si no copias VLC en `resources/windows/vlc`, la app usará un VLC 3 de 64 bits instalado en el sistema.
+
+### Pruebas de la versión Windows
+
+- Lógica compartida (las mismas pruebas que Android) y almacenamiento de escritorio.
+- `VlcPlaybackIntegrationTest`: reproducción **real** con libVLC servida por HTTP como un servidor IPTV:
+  canal MPEG-TS H.264 + **AC3** (vídeo y pista de audio verificados), HLS, fallback HLS→TS, 403 sin bucles de
+  reintento, película MKV con reanudación y salto, y reconexión automática cuando el servidor corta un canal.
+- `UiSmokeTest`: renderiza login, inicio y controles del reproductor sin ventana y guarda capturas
+  (artifact `desktop-screenshots` del workflow).
+
+## 13. Aviso
 
 WEBPRO PLAYER es únicamente un reproductor. No proporciona contenido. El usuario es responsable de disponer de
 un servicio IPTV legítimo y de los derechos sobre el contenido que reproduce.

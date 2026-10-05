@@ -12,3 +12,10 @@
 *.jks
 /app/release/
 keystore.properties
+
+# Desktop (Windows) build
+/desktop/.gradle/
+/desktop/build/
+/desktop/.kotlin/
+/desktop/resources/windows/vlc/
+/.kotlin/
