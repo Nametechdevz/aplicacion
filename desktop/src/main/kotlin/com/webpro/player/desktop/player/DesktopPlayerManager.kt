@@ -1,8 +1,11 @@
 package com.webpro.player.desktop.player
 
 import com.webpro.player.desktop.storage.FileSettingsRepository
+import com.webpro.player.player.AdaptiveBufferController
+import com.webpro.player.player.BufferProfile
 import com.webpro.player.player.PlaybackRequest
 import com.webpro.player.player.PlaybackStatus
+import com.webpro.player.player.PlaybackTuning
 import com.webpro.player.player.PlayerError
 import com.webpro.player.player.PlayerState
 import com.webpro.player.player.RetryPolicy
@@ -88,6 +91,12 @@ class DesktopPlayerManager(
     private var watchdogJob: Job? = null
     private var recoveryJob: Job? = null
 
+    // ---- slow-connection adaptation (UI thread)
+    private var tuning = PlaybackTuning()
+    private var controller = AdaptiveBufferController(tuning.mode, BufferProfile.NORMAL)
+    private var seekingUntil = 0L
+    private var stallCounted = false
+
     /** Generations queued by play() and consumed by the mediaChanged event (VLC event thread). */
     private val pendingGenerations = ConcurrentLinkedQueue<Long>()
     private val eventGeneration = AtomicLong(-1)
@@ -99,7 +108,7 @@ class DesktopPlayerManager(
 
         override fun opening(mediaPlayer: MediaPlayer) = post { onStatus(PlaybackStatus.PREPARING) }
         override fun buffering(mediaPlayer: MediaPlayer, newCache: Float) = post {
-            if (newCache < 100f) onStatus(PlaybackStatus.BUFFERING) else onPlaying()
+            if (newCache < 100f) onBuffering(newCache) else onPlaying()
         }
         override fun playing(mediaPlayer: MediaPlayer) = post { onPlaying() }
         override fun paused(mediaPlayer: MediaPlayer) = post { onStatus(PlaybackStatus.PAUSED) }
@@ -144,13 +153,17 @@ class DesktopPlayerManager(
         this.request = request
         sourceIndex = 0
         retryAttempt = 0
+        val prefs = settings.desktopSettings.value
+        tuning = PlaybackTuning(prefs.connectionMode, prefs.maxQuality, BufferProfile.fromName(prefs.learnedProfile))
+        controller = AdaptiveBufferController(tuning.mode, BufferProfile.initial(tuning.mode, tuning.learned))
         _tracks.value = TrackState()
         _state.value = PlayerState(
             request = request,
             status = PlaybackStatus.PREPARING,
             isLive = request.isLive,
             maxRetries = retryPolicy.maxAttempts,
-            isMuted = _state.value.isMuted
+            isMuted = _state.value.isMuted,
+            bufferProfile = controller.profile
         )
         sink.clear()
         load(request.startPositionMs)
@@ -200,6 +213,7 @@ class DesktopPlayerManager(
         val target = positionMs.coerceIn(0L, (state.durationMs - 1000L).coerceAtLeast(0L))
         _state.update { it.copy(positionMs = target) }
         lastProgressAt = now()
+        seekingUntil = now() + SEEK_GRACE_MS
         onControl { controls().setTime(target) }
     }
 
@@ -282,10 +296,12 @@ class DesktopPlayerManager(
         cancelJobs()
         val gen = ++generation
         playedCurrentSource = false
+        stallCounted = false
         lastProgressAt = now()
-        _state.update { it.copy(status = PlaybackStatus.PREPARING, error = null, sourceIndex = sourceIndex) }
-        val caching = settings.desktopSettings.value.networkCachingMs
-        val options = VlcOptions.mediaOptions(current.isLive, caching, startPositionMs)
+        _state.update { it.copy(status = PlaybackStatus.PREPARING, error = null, sourceIndex = sourceIndex, bufferPercent = null) }
+        val profile = controller.profile
+        val caching = if (current.isLive) profile.liveCachingMs else profile.vodCachingMs
+        val options = VlcOptions.mediaOptions(current.isLive, caching, startPositionMs, profile.maxHeight(tuning.maxQuality))
         ui.launch {
             val started = withContext(control) {
                 val player = ensureEngine() ?: return@withContext null
@@ -314,12 +330,37 @@ class DesktopPlayerManager(
         _state.update { if (it.status == status) it else it.copy(status = status) }
     }
 
+    private fun onBuffering(cache: Float) {
+        // Running out of data after playback started (not caused by a seek) = connection too slow.
+        if (_state.value.status == PlaybackStatus.PLAYING && playedCurrentSource && now() > seekingUntil) onStall()
+        onStatus(PlaybackStatus.BUFFERING)
+        if (_state.value.status == PlaybackStatus.BUFFERING) {
+            _state.update { it.copy(bufferPercent = cache.toInt().coerceIn(0, 99)) }
+        }
+    }
+
+    /**
+     * Records a stall; after repeated stalls (AUTO mode) the buffer level goes up one step,
+     * is remembered for the next sessions and the stream is reopened with the bigger buffer.
+     */
+    private fun onStall() {
+        if (stallCounted) return
+        stallCounted = true
+        if (!controller.onRebuffer()) return
+        val profile = controller.profile
+        ui.launch { settings.setLearnedProfile(profile.name) }
+        _state.update { it.copy(bufferProfile = profile, slowNetworkAdaptations = it.slowNetworkAdaptations + 1) }
+        val current = request ?: return
+        load(if (current.isLive) 0L else _state.value.positionMs)
+    }
+
     private fun onPlaying() {
         playedCurrentSource = true
+        stallCounted = false
         lastPlayingAt = now()
         lastProgressAt = now()
         if (_state.value.status != PlaybackStatus.PLAYING) {
-            _state.update { it.copy(status = PlaybackStatus.PLAYING, error = null, retryAttempt = 0) }
+            _state.update { it.copy(status = PlaybackStatus.PLAYING, error = null, retryAttempt = 0, bufferPercent = null) }
             // libVLC only accepts a volume once the audio output exists.
             val volume = _volume.value
             onControl { audio().setVolume(volume) }
@@ -328,7 +369,10 @@ class DesktopPlayerManager(
     }
 
     private fun onTime(time: Long) {
-        if (time != _state.value.positionMs) lastProgressAt = now()
+        if (time != _state.value.positionMs) {
+            lastProgressAt = now()
+            stallCounted = false
+        }
         _state.update { it.copy(positionMs = time.coerceAtLeast(0L)) }
         if (_state.value.status == PlaybackStatus.BUFFERING || _state.value.status == PlaybackStatus.PREPARING) {
             onPlaying()
@@ -426,6 +470,13 @@ class DesktopPlayerManager(
                     PlaybackStatus.BUFFERING, PlaybackStatus.RECONNECTING -> idle > BUFFERING_TIMEOUT_MS
                     PlaybackStatus.PLAYING -> state.isLive && idle > LIVE_FROZEN_TIMEOUT_MS
                     else -> false
+                }
+                // libVLC often freezes the picture instead of reporting buffering when data runs out.
+                if (state.status == PlaybackStatus.PLAYING && playedCurrentSource && idle > STALL_DETECT_MS &&
+                    now() > seekingUntil
+                ) {
+                    onStall()
+                    if (gen != generation) break
                 }
                 if (stalled && gen == generation) {
                     handleFailure(probeFirst = true)
@@ -532,6 +583,8 @@ class DesktopPlayerManager(
 
     private companion object {
         const val STABLE_PLAYBACK_MS = 15_000L
+        const val STALL_DETECT_MS = 4_000L
+        const val SEEK_GRACE_MS = 5_000L
         const val OPEN_TIMEOUT_MS = 20_000L
         const val BUFFERING_TIMEOUT_MS = 20_000L
         const val LIVE_FROZEN_TIMEOUT_MS = 12_000L

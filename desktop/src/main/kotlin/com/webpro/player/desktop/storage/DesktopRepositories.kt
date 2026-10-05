@@ -2,10 +2,12 @@ package com.webpro.player.desktop.storage
 
 import com.webpro.player.domain.model.AccountInfo
 import com.webpro.player.domain.model.AppSettings
+import com.webpro.player.domain.model.ConnectionMode
 import com.webpro.player.domain.model.ContentType
 import com.webpro.player.domain.model.Credentials
 import com.webpro.player.domain.model.FavoriteItem
 import com.webpro.player.domain.model.LiveStreamFormat
+import com.webpro.player.domain.model.MaxQuality
 import com.webpro.player.domain.model.ResumePoint
 import com.webpro.player.domain.model.Session
 import com.webpro.player.domain.repository.FavoritesRepository
@@ -162,21 +164,26 @@ data class DesktopSettings(
     val autoPlayNextEpisode: Boolean = true,
     val volume: Int = 100,
     val hardwareDecoding: Boolean = true,
-    val networkCachingMs: Int = 2000
-)
+    val connectionMode: ConnectionMode = ConnectionMode.AUTO,
+    val maxQuality: MaxQuality = MaxQuality.AUTO,
+    /** Buffer level learned automatically on a slow connection (AUTO mode). */
+    val learnedProfile: String? = null
+) {
+    fun toAppSettings() = AppSettings(liveStreamFormat, autoPlayNextEpisode, connectionMode, maxQuality, learnedProfile)
+}
 
-/** App settings plus desktop playback preferences (volume, hardware decoding, buffer). */
+/** App settings plus desktop playback preferences (volume, hardware decoding). */
 class FileSettingsRepository(dir: File, json: Json) : SettingsRepository {
     private val store = JsonFileStore(File(dir, "settings.json"), DesktopSettings.serializer(), json, DesktopSettings())
 
     val desktopSettings: StateFlow<DesktopSettings> = store.data
 
     override val settings: Flow<AppSettings> = store.data
-        .map { AppSettings(it.liveStreamFormat, it.autoPlayNextEpisode) }
+        .map { it.toAppSettings() }
         .distinctUntilChanged()
 
     override suspend fun current(): AppSettings =
-        store.data.value.let { AppSettings(it.liveStreamFormat, it.autoPlayNextEpisode) }
+        store.data.value.toAppSettings()
 
     override suspend fun setLiveStreamFormat(format: LiveStreamFormat) {
         store.update { it.copy(liveStreamFormat = format) }
@@ -194,8 +201,17 @@ class FileSettingsRepository(dir: File, json: Json) : SettingsRepository {
         store.update { it.copy(hardwareDecoding = enabled) }
     }
 
-    suspend fun setNetworkCaching(ms: Int) {
-        store.update { it.copy(networkCachingMs = ms.coerceIn(500, 10_000)) }
+    override suspend fun setConnectionMode(mode: ConnectionMode) {
+        // A manual choice (or going back to automatic) starts learning from scratch.
+        store.update { it.copy(connectionMode = mode, learnedProfile = null) }
+    }
+
+    override suspend fun setMaxQuality(quality: MaxQuality) {
+        store.update { it.copy(maxQuality = quality) }
+    }
+
+    override suspend fun setLearnedProfile(profile: String?) {
+        store.update { it.copy(learnedProfile = profile) }
     }
 
     override suspend fun clear() = store.clear()

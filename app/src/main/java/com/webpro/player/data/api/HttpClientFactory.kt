@@ -22,7 +22,8 @@ object HttpClientFactory {
     /** Client for media streams; shares the connection pool with [base]. */
     fun createPlayerClient(base: OkHttpClient): OkHttpClient = base.newBuilder()
         .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        // Generous read timeout: on slow links a segment can take a while to arrive.
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private fun userAgentInterceptor() = Interceptor { chain ->

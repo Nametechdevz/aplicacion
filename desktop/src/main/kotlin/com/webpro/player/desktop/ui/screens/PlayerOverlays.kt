@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
@@ -43,6 +44,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,13 +66,40 @@ import com.webpro.player.player.PlayerState
 import com.webpro.player.ui.components.FocusableCard
 import com.webpro.player.ui.theme.WebProColors
 import com.webpro.player.utils.TimeFormat
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 @Composable
-fun StatusSpinner(visible: Boolean, modifier: Modifier = Modifier) {
+fun StatusSpinner(visible: Boolean, modifier: Modifier = Modifier, percent: Int? = null) {
     AnimatedVisibility(visible, modifier, enter = fadeIn(), exit = fadeOut()) {
         Box(Modifier.size(88.dp).clip(CircleShape).background(WebProColors.Scrim), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = WebProColors.Primary, strokeWidth = 4.dp, modifier = Modifier.size(50.dp))
+            if (percent != null) {
+                Text("$percent%", color = Color.White, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
+/** Shown for a few seconds each time the buffer is enlarged because the connection is slow. */
+@Composable
+fun SlowNetworkBanner(adaptations: Int, modifier: Modifier = Modifier) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(adaptations) {
+        if (adaptations > 0) {
+            visible = true
+            delay(6_000)
+            visible = false
+        }
+    }
+    AnimatedVisibility(visible, modifier.padding(top = 140.dp), enter = fadeIn(), exit = fadeOut()) {
+        Row(
+            Modifier.clip(RoundedCornerShape(24.dp)).background(WebProColors.Scrim).padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Rounded.NetworkCheck, null, tint = WebProColors.Accent)
+            Spacer(Modifier.width(10.dp))
+            Text(S.SLOW_NETWORK, color = Color.White, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

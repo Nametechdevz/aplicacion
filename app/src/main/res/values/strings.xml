@@ -156,6 +156,7 @@
     <string name="player_unlock_rotation">Permitir rotación</string>
     <string name="player_reconnecting">Reconectando…</string>
     <string name="player_reconnecting_attempt">Reconectando… intento %1$d de %2$d</string>
+    <string name="player_slow_network">Conexión lenta detectada: aumentando el búfer para evitar cortes</string>
     <string name="player_resumed_from">Reanudando desde %1$s</string>
     <string name="player_error_title">No se puede reproducir</string>
     <string name="player_error_timeout">El servidor tardó demasiado en enviar la señal.</string>
@@ -187,6 +188,15 @@
     <string name="settings_format_auto">Automático</string>
     <string name="settings_format_hls">HLS (m3u8)</string>
     <string name="settings_format_ts">MPEG-TS (ts)</string>
+    <string name="settings_connection">Velocidad de conexión</string>
+    <string name="settings_connection_help">En automático, WEBPRO PLAYER detecta los cortes y aumenta el búfer para que la reproducción no se detenga (tarda unos segundos más en arrancar). Elige Lenta o Muy lenta si tu internet es limitado.</string>
+    <string name="settings_connection_auto">Automática</string>
+    <string name="settings_connection_fast">Rápida</string>
+    <string name="settings_connection_slow">Lenta</string>
+    <string name="settings_connection_very_slow">Muy lenta</string>
+    <string name="settings_quality">Calidad máxima</string>
+    <string name="settings_quality_help">Cuando el servidor ofrece varias calidades, limita la resolución para gastar menos datos y evitar cortes. En automático se baja a 720p/480p si la conexión es lenta.</string>
+    <string name="settings_quality_auto">Automática</string>
     <string name="settings_autoplay">Reproducir el siguiente episodio</string>
     <string name="settings_autoplay_help">Al terminar un episodio comienza automáticamente el siguiente.</string>
     <string name="settings_data">Sesión y datos</string>

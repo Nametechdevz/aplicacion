@@ -83,6 +83,7 @@ class PlayerViewModel(
     private var zapJob: Job? = null
     private var resolveJob: Job? = null
     private var endedHandledFor: String? = null
+    private var tuning = PlaybackTuning()
 
     init {
         resolve()
@@ -297,12 +298,14 @@ class PlayerViewModel(
 
     // ---------------------------------------------------------------- playback
 
-    private fun startPlayback(request: PlaybackRequest) {
+    private suspend fun startPlayback(request: PlaybackRequest) {
         activeRequest = request
         endedHandledFor = null
+        val settings = settingsRepository.current()
+        tuning = PlaybackTuning(settings.connectionMode, settings.maxQuality, BufferProfile.fromName(settings.learnedProfile))
         if (hostStarted) {
             pendingRequest = null
-            playerManager.play(ownerId, request)
+            playerManager.play(ownerId, request, tuning)
         } else {
             pendingRequest = request
         }
@@ -345,7 +348,7 @@ class PlayerViewModel(
         val pending = pendingRequest
         if (pending != null) {
             pendingRequest = null
-            playerManager.play(ownerId, pending)
+            playerManager.play(ownerId, pending, tuning)
         } else {
             playerManager.onHostStarted(ownerId)
         }

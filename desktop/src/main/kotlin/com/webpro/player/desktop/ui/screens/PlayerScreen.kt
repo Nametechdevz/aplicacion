@@ -179,9 +179,11 @@ fun PlayerScreen(target: PlayerTarget) {
         StatusSpinner(
             visible = !isError && (ui.isResolving || state.status == PlaybackStatus.PREPARING ||
                 state.status == PlaybackStatus.BUFFERING || state.status == PlaybackStatus.RECONNECTING),
-            modifier = Modifier.align(Alignment.Center)
+            modifier = Modifier.align(Alignment.Center),
+            percent = state.bufferPercent.takeIf { state.status == PlaybackStatus.BUFFERING }
         )
         ReconnectingBanner(state, Modifier.align(Alignment.TopCenter))
+        SlowNetworkBanner(state.slowNetworkAdaptations, Modifier.align(Alignment.TopCenter))
         ZappingOverlay(ui.zappingChannel, Modifier.align(Alignment.TopStart))
         SeekHud(seekHud, Modifier.align(Alignment.Center))
         VolumeHud(if (volumeHud > 0) volume else null, state.isMuted, Modifier.align(Alignment.CenterEnd))

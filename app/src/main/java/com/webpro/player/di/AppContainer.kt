@@ -30,6 +30,7 @@ import com.webpro.player.utils.NetworkMonitor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 /**
@@ -89,6 +90,8 @@ class AppContainer(context: Context) {
     val playerManager by lazy {
         val dataSourceFactory = OkHttpDataSource.Factory(playerHttpClient)
             .setUserAgent(HttpClientFactory.USER_AGENT)
-        PlayerManager(appContext, dataSourceFactory, networkMonitor)
+        PlayerManager(appContext, dataSourceFactory, networkMonitor) { learned ->
+            applicationScope.launch { settingsRepository.setLearnedProfile(learned.name) }
+        }
     }
 }

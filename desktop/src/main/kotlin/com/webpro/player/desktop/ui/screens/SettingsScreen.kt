@@ -45,7 +45,9 @@ import com.webpro.player.desktop.ui.S
 import com.webpro.player.desktop.ui.Screen
 import com.webpro.player.desktop.ui.components.Dimens
 import com.webpro.player.desktop.ui.rememberScreenModel
+import com.webpro.player.domain.model.ConnectionMode
 import com.webpro.player.domain.model.LiveStreamFormat
+import com.webpro.player.domain.model.MaxQuality
 import com.webpro.player.ui.components.ScreenHeader
 import com.webpro.player.ui.theme.WebProColors
 import com.webpro.player.utils.TimeFormat
@@ -91,15 +93,38 @@ fun SettingsScreen() {
                 }
             }
             Spacer(Modifier.height(14.dp))
-            Text(S.BUFFER, style = MaterialTheme.typography.titleSmall)
-            Text(S.BUFFER_HELP, style = MaterialTheme.typography.bodySmall, color = WebProColors.TextSecondary)
+            Text(S.CONNECTION, style = MaterialTheme.typography.titleSmall)
+            Text(S.CONNECTION_HELP, style = MaterialTheme.typography.bodySmall, color = WebProColors.TextSecondary)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1000, 2000, 3000, 5000, 8000).forEach { ms ->
+                ConnectionMode.entries.forEach { mode ->
                     FilterChip(
-                        selected = settings.networkCachingMs == ms,
-                        onClick = { model.setBuffer(ms) },
-                        label = { Text("${ms / 1000} s") },
+                        selected = settings.connectionMode == mode,
+                        onClick = { model.setConnectionMode(mode) },
+                        label = {
+                            Text(
+                                when (mode) {
+                                    ConnectionMode.AUTO -> S.CONNECTION_AUTO
+                                    ConnectionMode.FAST -> S.CONNECTION_FAST
+                                    ConnectionMode.SLOW -> S.CONNECTION_SLOW
+                                    ConnectionMode.VERY_SLOW -> S.CONNECTION_VERY_SLOW
+                                }
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = WebProColors.Primary, selectedLabelColor = WebProColors.TextPrimary)
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(S.QUALITY, style = MaterialTheme.typography.titleSmall)
+            Text(S.QUALITY_HELP, style = MaterialTheme.typography.bodySmall, color = WebProColors.TextSecondary)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MaxQuality.entries.forEach { quality ->
+                    FilterChip(
+                        selected = settings.maxQuality == quality,
+                        onClick = { model.setMaxQuality(quality) },
+                        label = { Text(quality.maxHeight?.let { "${it}p" } ?: S.QUALITY_AUTO) },
                         colors = FilterChipDefaults.filterChipColors(selectedContainerColor = WebProColors.Primary, selectedLabelColor = WebProColors.TextPrimary)
                     )
                 }

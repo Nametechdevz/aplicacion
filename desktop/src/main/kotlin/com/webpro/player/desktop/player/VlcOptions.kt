@@ -27,14 +27,18 @@ object VlcOptions {
         addAll(extra)
     }
 
-    /** Per-media options. */
-    fun mediaOptions(isLive: Boolean, networkCachingMs: Int, startPositionMs: Long): Array<String> = buildList {
+    /**
+     * Per-media options. [maxHeight] caps the resolution chosen in adaptive (multi-bitrate)
+     * HLS so a slow connection gets a lighter variant instead of stalling.
+     */
+    fun mediaOptions(isLive: Boolean, networkCachingMs: Int, startPositionMs: Long, maxHeight: Int? = null): Array<String> = buildList {
         val caching = if (isLive) networkCachingMs else maxOf(networkCachingMs, VOD_MIN_CACHING_MS)
         add(":network-caching=$caching")
         add(":live-caching=$caching")
         add(":http-reconnect")
         add(":http-user-agent=$USER_AGENT")
         add(":ipv4-timeout=8000")
+        if (maxHeight != null) add(":adaptive-maxheight=$maxHeight")
         if (!isLive && startPositionMs > 0) {
             add(":start-time=${startPositionMs / 1000.0}")
         }

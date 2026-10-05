@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.webpro.player.domain.model.AppSettings
+import com.webpro.player.domain.model.ConnectionMode
 import com.webpro.player.domain.model.LiveStreamFormat
+import com.webpro.player.domain.model.MaxQuality
 import com.webpro.player.domain.model.Session
 import com.webpro.player.domain.repository.FavoritesRepository
 import com.webpro.player.domain.repository.PlaybackHistoryRepository
@@ -38,6 +40,14 @@ class SettingsViewModel(
 
     fun setLiveFormat(format: LiveStreamFormat) {
         viewModelScope.launch { settingsRepository.setLiveStreamFormat(format) }
+    }
+
+    fun setConnectionMode(mode: ConnectionMode) {
+        viewModelScope.launch { settingsRepository.setConnectionMode(mode) }
+    }
+
+    fun setMaxQuality(quality: MaxQuality) {
+        viewModelScope.launch { settingsRepository.setMaxQuality(quality) }
     }
 
     fun setAutoPlayNext(enabled: Boolean) {

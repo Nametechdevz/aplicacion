@@ -48,7 +48,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.webpro.player.BuildConfig
 import com.webpro.player.R
+import com.webpro.player.domain.model.ConnectionMode
 import com.webpro.player.domain.model.LiveStreamFormat
+import com.webpro.player.domain.model.MaxQuality
 import com.webpro.player.ui.adaptive.LocalDeviceProfile
 import com.webpro.player.ui.components.ScreenHeader
 import com.webpro.player.ui.theme.WebProColors
@@ -127,6 +129,68 @@ fun SettingsScreen(
                                         LiveStreamFormat.TS -> R.string.settings_format_ts
                                     }
                                 )
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = WebProColors.Primary,
+                            selectedLabelColor = WebProColors.TextPrimary
+                        )
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(stringResource(R.string.settings_connection), style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.settings_connection_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = WebProColors.TextSecondary
+            )
+            Spacer(Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ConnectionMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = settings.connectionMode == mode,
+                        onClick = { viewModel.setConnectionMode(mode) },
+                        label = {
+                            Text(
+                                stringResource(
+                                    when (mode) {
+                                        ConnectionMode.AUTO -> R.string.settings_connection_auto
+                                        ConnectionMode.FAST -> R.string.settings_connection_fast
+                                        ConnectionMode.SLOW -> R.string.settings_connection_slow
+                                        ConnectionMode.VERY_SLOW -> R.string.settings_connection_very_slow
+                                    }
+                                )
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = WebProColors.Primary,
+                            selectedLabelColor = WebProColors.TextPrimary
+                        )
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(stringResource(R.string.settings_quality), style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.settings_quality_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = WebProColors.TextSecondary
+            )
+            Spacer(Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MaxQuality.entries.forEach { quality ->
+                    FilterChip(
+                        selected = settings.maxQuality == quality,
+                        onClick = { viewModel.setMaxQuality(quality) },
+                        label = {
+                            Text(
+                                when (quality) {
+                                    MaxQuality.AUTO -> stringResource(R.string.settings_quality_auto)
+                                    else -> "${quality.maxHeight}p"
+                                }
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(

@@ -16,6 +16,8 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 /**
  * The only owner of an [ExoPlayer] in the app. Live TV, movies and episodes all play
@@ -42,7 +45,9 @@ import kotlinx.coroutines.launch
  * - stale events from a previous item are ignored (generation counter + media id),
  * - bounded reconnection with backoff and fallback to alternative stream formats,
  * - ownership: only the screen that started playback can stop or release it, so a
- *   closing player screen never kills the playback started by the next one.
+ *   closing player screen never kills the playback started by the next one,
+ * - slow connections: the buffer grows one level at a time when playback keeps
+ *   stalling (AUTO mode) and adaptive HLS is capped to a lower quality.
  *
  * Every method must be called on the main thread.
  */
@@ -51,7 +56,9 @@ class PlayerManager(
     context: Context,
     private val dataSourceFactory: DataSource.Factory,
     private val networkMonitor: NetworkMonitor,
-    private val retryPolicy: RetryPolicy = RetryPolicy()
+    private val retryPolicy: RetryPolicy = RetryPolicy(),
+    /** Persists the buffer level learned on a slow connection (reused next time). */
+    private val onProfileLearned: (BufferProfile) -> Unit = {}
 ) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -76,14 +83,30 @@ class PlayerManager(
     private var retryJob: Job? = null
     private var progressJob: Job? = null
 
+    // ---- slow-connection adaptation
+    private val bandwidthMeter by lazy { DefaultBandwidthMeter.getSingletonInstance(appContext) }
+    private var tuning = PlaybackTuning()
+    private var controller = AdaptiveBufferController(tuning.mode, BufferProfile.NORMAL)
+    private var learnedInProcess: BufferProfile? = null
+    private var playerProfile: BufferProfile? = null
+    private var hasBeenReady = false
+    private var seeking = false
+    private var transferredInProcess = false
+
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (!isCurrentItem()) return
             when (playbackState) {
-                Player.STATE_BUFFERING -> if (_state.value.status != PlaybackStatus.RECONNECTING) {
-                    setStatus(PlaybackStatus.BUFFERING)
+                Player.STATE_BUFFERING -> {
+                    val wasPlaying = _state.value.status == PlaybackStatus.PLAYING
+                    if (_state.value.status != PlaybackStatus.RECONNECTING) setStatus(PlaybackStatus.BUFFERING)
+                    // A stall after playback started (not caused by a seek): the connection is short.
+                    if (wasPlaying && hasBeenReady && !seeking) onRebuffer()
                 }
                 Player.STATE_READY -> {
+                    hasBeenReady = true
+                    seeking = false
+                    transferredInProcess = true
                     lastReadyElapsed = SystemClock.elapsedRealtime()
                     setStatus(if (exoPlayer?.playWhenReady == true) PlaybackStatus.PLAYING else PlaybackStatus.PAUSED)
                     _state.update { it.copy(error = null, retryAttempt = 0) }
@@ -130,7 +153,7 @@ class PlayerManager(
      * (double click, recomposition, rotation) is a no-op unless [force] is set.
      */
     @MainThread
-    fun play(owner: String, request: PlaybackRequest, force: Boolean = false) {
+    fun play(owner: String, request: PlaybackRequest, tuning: PlaybackTuning = PlaybackTuning(), force: Boolean = false) {
         val sameContent = ownerId == owner && currentRequest?.contentKey == request.contentKey &&
             exoPlayer != null && _state.value.status != PlaybackStatus.ERROR
         if (sameContent && !force) return
@@ -139,12 +162,17 @@ class PlayerManager(
         sourceIndex = 0
         retryAttempt = 0
         pendingResumePositionMs = null
+        this.tuning = tuning
+        val learned = listOfNotNull(tuning.learned, learnedInProcess).maxByOrNull { it.ordinal }
+        val estimate = if (transferredInProcess) bandwidthMeter.bitrateEstimate else null
+        controller = AdaptiveBufferController(tuning.mode, BufferProfile.initial(tuning.mode, learned, estimate))
         _state.value = PlayerState(
             request = request,
             status = PlaybackStatus.PREPARING,
             isLive = request.isLive,
             maxRetries = retryPolicy.maxAttempts,
-            isMuted = _state.value.isMuted
+            isMuted = _state.value.isMuted,
+            bufferProfile = controller.profile
         )
         load(request.startPositionMs)
     }
@@ -190,6 +218,7 @@ class PlayerManager(
         val player = exoPlayer ?: return
         if (!player.isCurrentMediaItemSeekable || player.isCurrentMediaItemLive) return
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: return
+        seeking = true
         player.seekTo((player.currentPosition + deltaMs).coerceIn(0L, duration))
         refreshProgress()
     }
@@ -199,6 +228,7 @@ class PlayerManager(
         val player = exoPlayer ?: return
         if (!player.isCurrentMediaItemSeekable || player.isCurrentMediaItemLive) return
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: return
+        seeking = true
         player.seekTo(positionMs.coerceIn(0L, duration))
         refreshProgress()
     }
@@ -257,17 +287,38 @@ class PlayerManager(
             return
         }
         cancelRetry()
+        // The buffer size is fixed per ExoPlayer instance: rebuild it when the level changed.
+        if (exoPlayer != null && playerProfile != controller.profile) releasePlayer()
         generation++
         val mediaId = "${request.contentKey}#$generation"
         activeMediaId = mediaId
         lastReadyElapsed = 0L
+        hasBeenReady = false
+        seeking = false
         val player = ensurePlayer()
-        val item = MediaItemFactory.create(request, source, mediaId)
+        val item = MediaItemFactory.create(request, source, mediaId, controller.profile.liveTargetOffsetMs)
         if (request.isLive || startPositionMs <= 0L) player.setMediaItem(item, true)
         else player.setMediaItem(item, startPositionMs)
         player.playWhenReady = true
         player.prepare()
         _state.update { it.copy(sourceIndex = sourceIndex, error = null) }
+    }
+
+    /** Raises the buffer level after repeated stalls and reopens the stream with it. */
+    private fun onRebuffer() {
+        if (!controller.onRebuffer()) return
+        val profile = controller.profile
+        learnedInProcess = profile
+        onProfileLearned(profile)
+        SafeLog.d("Slow connection: buffer level raised to $profile")
+        _state.update { it.copy(bufferProfile = profile, slowNetworkAdaptations = it.slowNetworkAdaptations + 1) }
+        val expectedGeneration = generation
+        scope.launch {
+            yield() // leave the ExoPlayer callback before rebuilding the player
+            if (expectedGeneration != generation) return@launch
+            val request = currentRequest ?: return@launch
+            load(if (request.isLive) 0L else currentPositionMs())
+        }
     }
 
     private fun handleError(error: PlaybackException) {
@@ -367,9 +418,19 @@ class PlayerManager(
         val renderers = DefaultRenderersFactory(appContext)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        val profile = controller.profile
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(MIN_BUFFER_MS, MAX_BUFFER_MS, BUFFER_FOR_PLAYBACK_MS, BUFFER_AFTER_REBUFFER_MS)
+            .setBufferDurationsMs(profile.minBufferMs, profile.maxBufferMs, profile.startBufferMs, profile.rebufferMs)
+            .setTargetBufferBytes(profile.targetBufferBytes)
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
+        // Adaptive HLS: never pick a variant taller than the cap (lower bitrate on slow links).
+        val trackSelector = DefaultTrackSelector(appContext).apply {
+            val maxHeight = profile.maxHeight(tuning.maxQuality)
+            if (maxHeight != null) {
+                setParameters(buildUponParameters().setMaxVideoSize(Int.MAX_VALUE, maxHeight).build())
+            }
+        }
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -378,6 +439,8 @@ class PlayerManager(
         val player = ExoPlayer.Builder(appContext, renderers)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
+            .setTrackSelector(trackSelector)
+            .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(SEEK_INCREMENT_MS)
@@ -386,6 +449,7 @@ class PlayerManager(
         player.addListener(listener)
         if (_state.value.isMuted) player.volume = 0f
         exoPlayer = player
+        playerProfile = profile
         _player.value = player
         startProgressUpdates()
         return player
@@ -403,6 +467,7 @@ class PlayerManager(
             player.release()
         }
         exoPlayer = null
+        playerProfile = null
         _player.value = null
     }
 
@@ -420,8 +485,16 @@ class PlayerManager(
         val player = exoPlayer ?: return
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L
         val live = player.isCurrentMediaItemLive || currentRequest?.isLive == true
+        val loading = player.playbackState == Player.STATE_BUFFERING
+        val percent = if (loading) {
+            val target = if (hasBeenReady) controller.profile.rebufferMs else controller.profile.startBufferMs
+            val ahead = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
+            ((ahead * 100) / target.coerceAtLeast(1)).toInt().coerceIn(0, 99)
+        } else null
         _state.update {
             it.copy(
+                bufferPercent = percent,
+                bufferProfile = controller.profile,
                 positionMs = player.currentPosition.coerceAtLeast(0L),
                 durationMs = duration,
                 bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
@@ -447,10 +520,6 @@ class PlayerManager(
     }
 
     private companion object {
-        const val MIN_BUFFER_MS = 15_000
-        const val MAX_BUFFER_MS = 50_000
-        const val BUFFER_FOR_PLAYBACK_MS = 2_000
-        const val BUFFER_AFTER_REBUFFER_MS = 4_000
         const val LOADER_RETRIES = 2
         const val SEEK_INCREMENT_MS = 10_000L
         const val PROGRESS_INTERVAL_MS = 500L

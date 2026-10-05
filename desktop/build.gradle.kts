@@ -46,7 +46,8 @@ sourceSets {
                 "com/webpro/player/player/PlaybackRequest.kt",
                 "com/webpro/player/player/PlayerError.kt",
                 "com/webpro/player/player/PlayerState.kt",
-                "com/webpro/player/player/RetryPolicy.kt"
+                "com/webpro/player/player/RetryPolicy.kt",
+                "com/webpro/player/player/NetworkAdaptation.kt"
             )
         }
     }
@@ -55,6 +56,7 @@ sourceSets {
             srcDir(sharedTests)
             include("com/webpro/player/desktop/**")
             include("com/webpro/player/utils/**", "com/webpro/player/data/**", "com/webpro/player/domain/**")
+            include("com/webpro/player/player/NetworkAdaptationTest.kt")
         }
     }
 }

@@ -36,6 +36,11 @@ class PlaybackLogicTest {
         val vod = VlcOptions.mediaOptions(isLive = false, networkCachingMs = 1000, startPositionMs = 90_500).toList()
         assertTrue(":network-caching=3000" in vod)
         assertTrue(":start-time=90.5" in vod)
+        assertFalse(vod.any { it.startsWith(":adaptive-maxheight") })
+
+        val capped = VlcOptions.mediaOptions(isLive = true, networkCachingMs = 7000, startPositionMs = 0, maxHeight = 720).toList()
+        assertTrue(":network-caching=7000" in capped)
+        assertTrue(":adaptive-maxheight=720" in capped)
 
         assertTrue("--avcodec-hw=any" in VlcOptions.factoryArgs(true))
         assertTrue("--avcodec-hw=none" in VlcOptions.factoryArgs(false))

@@ -184,6 +184,28 @@ Un único sistema centralizado (`player/`):
   silenciar), modo de imagen (ajustar/zoom/estirar), lista de canales, episodio anterior/siguiente y bloqueo de
   rotación en móviles. Se ocultan solos a los 4,5 s.
 
+### Conexiones lentas (Android y Windows)
+
+La lógica es común a ambas plataformas (`player/NetworkAdaptation.kt`, probada en `NetworkAdaptationTest`):
+
+| Nivel | Búfer directo (Windows) | Búfer Android (mín./máx./arranque) | Calidad máx. automática |
+|---|---|---|---|
+| Rápida | 1,5 s | 15 s / 50 s / 1,5 s | sin límite |
+| Normal | 3 s | 20 s / 60 s / 2,5 s | sin límite |
+| Lenta | 7 s | 40 s / 120 s / 5 s | 720p |
+| Muy lenta | 14 s | 60 s / 180 s / 8 s | 480p |
+
+- **Configuración → Velocidad de conexión**: *Automática* (por defecto), *Rápida*, *Lenta* o *Muy lenta*.
+- En *Automática*, dos cortes en menos de 90 s suben el búfer un nivel (máximo «Muy lenta»), el canal se
+  reabre en el mismo punto y aparece el aviso «Conexión lenta detectada». El nivel aprendido se guarda y se
+  reutiliza en las siguientes sesiones; volver a elegir *Automática* lo reinicia. En Android también se usa
+  la velocidad medida para elegir el nivel inicial.
+- **Calidad máxima** (Automática/1080p/720p/480p) limita la variante elegida en HLS adaptativo
+  (`DefaultTrackSelector` en Android, `:adaptive-maxheight` en libVLC).
+- El indicador de carga muestra el porcentaje de búfer.
+- Límite físico: si la velocidad real es menor que el bitrate del canal y el servidor no ofrece una calidad
+  menor, ningún reproductor puede reproducirlo sin pausas; un búfer mayor solo las hace menos frecuentes.
+
 ### Manejo de errores (`PlayerError` + `PlayerErrorClassifier`)
 
 | Error | Tratamiento |
@@ -236,7 +258,7 @@ Aplicación de escritorio nativa (no es un emulador ni una web) con instalador *
   MPEG-TS, HLS, MKV, MP4, AVI… con audio **AAC, AC3, E-AC3 (Dolby Digital Plus), DTS, MP2, MP3**,
   subtítulos y varias pistas de audio.
 - **Optimizado para IPTV**: decodificación por GPU (D3D11/DXVA2) con fallback automático a software,
-  desentrelazado automático (canales 1080i/576i), búfer de red configurable, reconexión HTTP, fotogramas
+  desentrelazado automático (canales 1080i/576i), búfer de red adaptativo (ver «Conexiones lentas»), reconexión HTTP, fotogramas
   tardíos descartados para mantener audio y vídeo sincronizados.
 - **Vídeo sin bloqueos**: los fotogramas se copian desde VLC a un pool de búferes y se pintan con la GPU de
   Compose/Skia; las llamadas nativas a VLC van por un hilo dedicado, así la interfaz nunca se congela.

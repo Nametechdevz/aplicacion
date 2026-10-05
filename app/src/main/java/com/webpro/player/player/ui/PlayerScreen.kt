@@ -306,6 +306,11 @@ fun PlayerScreen(
             modifier = Modifier.align(Alignment.Center)
         )
 
+        SlowNetworkBanner(
+            adaptations = state.slowNetworkAdaptations,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
+
         ReconnectingBanner(
             state = state,
             modifier = Modifier

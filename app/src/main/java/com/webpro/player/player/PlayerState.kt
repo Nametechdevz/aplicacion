@@ -25,7 +25,13 @@ data class PlayerState(
     val maxRetries: Int = 0,
     val sourceIndex: Int = 0,
     val isMuted: Boolean = false,
-    val videoAspectRatio: Float? = null
+    val videoAspectRatio: Float? = null,
+    /** 0..99 while (re)buffering, null otherwise. */
+    val bufferPercent: Int? = null,
+    /** Current buffer level (adapts to slow connections in AUTO mode). */
+    val bufferProfile: BufferProfile = BufferProfile.NORMAL,
+    /** Incremented each time the player raised the buffer because the connection was too slow. */
+    val slowNetworkAdaptations: Int = 0
 ) {
     val isPlaying: Boolean get() = status == PlaybackStatus.PLAYING
     val isLoading: Boolean

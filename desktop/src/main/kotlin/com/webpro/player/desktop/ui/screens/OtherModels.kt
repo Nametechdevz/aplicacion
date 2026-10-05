@@ -205,7 +205,13 @@ class SettingsModel(private val c: DesktopContainer, private val onLoggedOut: ()
             c.playerManager.invalidateEngine()
         }
     }
-    fun setBuffer(ms: Int) { scope.launch { c.settingsRepository.setNetworkCaching(ms) } }
+    fun setConnectionMode(mode: com.webpro.player.domain.model.ConnectionMode) {
+        scope.launch { c.settingsRepository.setConnectionMode(mode) }
+    }
+
+    fun setMaxQuality(quality: com.webpro.player.domain.model.MaxQuality) {
+        scope.launch { c.settingsRepository.setMaxQuality(quality) }
+    }
 
     fun logout() {
         job = scope.launch {

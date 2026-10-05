@@ -3,7 +3,9 @@ package com.webpro.player.desktop.storage
 import com.webpro.player.domain.model.ContentType
 import com.webpro.player.domain.model.Credentials
 import com.webpro.player.domain.model.FavoriteItem
+import com.webpro.player.domain.model.ConnectionMode
 import com.webpro.player.domain.model.LiveStreamFormat
+import com.webpro.player.domain.model.MaxQuality
 import com.webpro.player.domain.model.ResumePoint
 import com.webpro.player.domain.model.Session
 import kotlinx.coroutines.flow.first
@@ -87,5 +89,25 @@ class DesktopStorageTest {
         assertEquals(LiveStreamFormat.TS, settings.current().liveStreamFormat)
         settings.setVolume(400)
         assertEquals(FileSettingsRepository.MAX_VOLUME, FileSettingsRepository(dir, json).desktopSettings.value.volume)
+    }
+
+    @Test
+    fun `connection settings persist and a manual choice resets the learned level`() = runTest {
+        val dir = tempDir()
+        // Settings written by v1.0.0 (with the old buffer field) still load.
+        File(dir, "settings.json").writeText("""{"liveStreamFormat":"HLS","networkCachingMs":5000}""")
+        val settings = FileSettingsRepository(dir, json)
+        assertEquals(LiveStreamFormat.HLS, settings.current().liveStreamFormat)
+        assertEquals(ConnectionMode.AUTO, settings.current().connectionMode)
+
+        settings.setLearnedProfile("SLOW")
+        settings.setMaxQuality(MaxQuality.P720)
+        val reloaded = FileSettingsRepository(dir, json).current()
+        assertEquals("SLOW", reloaded.learnedProfile)
+        assertEquals(MaxQuality.P720, reloaded.maxQuality)
+
+        settings.setConnectionMode(ConnectionMode.VERY_SLOW)
+        assertEquals(ConnectionMode.VERY_SLOW, settings.current().connectionMode)
+        assertEquals(null, settings.current().learnedProfile)
     }
 }

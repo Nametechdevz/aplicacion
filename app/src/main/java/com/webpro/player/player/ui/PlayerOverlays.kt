@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
@@ -34,6 +35,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +79,36 @@ fun PlayerStatusOverlay(
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(color = WebProColors.Primary, strokeWidth = 4.dp, modifier = Modifier.size(48.dp))
+            val percent = state.bufferPercent
+            if (percent != null && percent > 0) {
+                Text("$percent%", style = MaterialTheme.typography.labelMedium, color = Color.White)
+            }
+        }
+    }
+}
+
+/** Shown for a few seconds when the player raised the buffer because the connection is slow. */
+@Composable
+fun SlowNetworkBanner(adaptations: Int, modifier: Modifier = Modifier) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(adaptations) {
+        if (adaptations > 0) {
+            visible = true
+            delay(6_000)
+            visible = false
+        }
+    }
+    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier.padding(top = 76.dp)) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(WebProColors.Scrim)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Rounded.NetworkCheck, contentDescription = null, tint = WebProColors.Favorite)
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(R.string.player_slow_network), style = MaterialTheme.typography.labelLarge, color = Color.White)
         }
     }
 }

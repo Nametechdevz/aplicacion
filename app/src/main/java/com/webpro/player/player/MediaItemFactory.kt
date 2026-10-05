@@ -8,7 +8,12 @@ import com.webpro.player.domain.usecase.StreamSource
 /** Builds Media3 [MediaItem]s with an explicit MIME type when the container is known. */
 object MediaItemFactory {
 
-    fun create(request: PlaybackRequest, source: StreamSource, mediaId: String): MediaItem {
+    fun create(
+        request: PlaybackRequest,
+        source: StreamSource,
+        mediaId: String,
+        liveTargetOffsetMs: Long? = null
+    ): MediaItem {
         val builder = MediaItem.Builder()
             .setUri(source.url)
             .setMediaId(mediaId)
@@ -23,6 +28,7 @@ object MediaItemFactory {
             builder.setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
                     .setMaxPlaybackSpeed(1.02f)
+                    .apply { if (liveTargetOffsetMs != null) setTargetOffsetMs(liveTargetOffsetMs) }
                     .build()
             )
         }
