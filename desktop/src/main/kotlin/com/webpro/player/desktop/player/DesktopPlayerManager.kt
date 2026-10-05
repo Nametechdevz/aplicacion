@@ -501,7 +501,8 @@ class DesktopPlayerManager(
         if (!VlcRuntime.initialize()) return null
         return runCatching {
             val hw = settings.desktopSettings.value.hardwareDecoding
-            val newFactory = MediaPlayerFactory(VlcOptions.factoryArgs(hw, VlcOptions.extraArgsFromSystem()))
+            // libVLC is already loaded by VlcRuntime: null skips vlcj's own (slow, disk-scanning) discovery.
+            val newFactory = MediaPlayerFactory(null, VlcOptions.factoryArgs(hw, VlcOptions.extraArgsFromSystem()))
             val player = newFactory.mediaPlayers().newEmbeddedMediaPlayer()
             player.videoSurface().set(newFactory.videoSurfaces().newVideoSurface(sink, sink, true))
             player.events().addMediaPlayerEventListener(events)

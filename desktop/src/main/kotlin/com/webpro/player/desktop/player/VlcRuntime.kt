@@ -18,18 +18,35 @@ object VlcRuntime {
     @Synchronized
     fun initialize(): Boolean {
         initialized?.let { return it }
-        val bundled = bundledVlcDir()
-        val ok = if (bundled != null) {
-            NativeLibrary.addSearchPath(RuntimeUtil.getLibVlcCoreLibraryName(), bundled.absolutePath)
-            NativeLibrary.addSearchPath(RuntimeUtil.getLibVlcLibraryName(), bundled.absolutePath)
-            // libvlccore must be loaded first so libvlc resolves it from the same folder.
-            runCatching { NativeLibrary.getInstance(RuntimeUtil.getLibVlcCoreLibraryName()) }.isSuccess &&
-                runCatching { NativeLibrary.getInstance(RuntimeUtil.getLibVlcLibraryName()) }.isSuccess
+        val dir = bundledVlcDir() ?: installedVlcDir()
+        val ok = if (dir != null) {
+            load(dir)
         } else {
+            // Last resort (slow on Windows: scans folders). Only reached without bundled/installed VLC.
             runCatching { NativeDiscovery().discover() }.getOrDefault(false)
         }
         initialized = ok
         return ok
+    }
+
+    private fun load(dir: File): Boolean {
+        NativeLibrary.addSearchPath(RuntimeUtil.getLibVlcCoreLibraryName(), dir.absolutePath)
+        NativeLibrary.addSearchPath(RuntimeUtil.getLibVlcLibraryName(), dir.absolutePath)
+        // libvlccore must be loaded first so libvlc resolves it from the same folder.
+        return runCatching { NativeLibrary.getInstance(RuntimeUtil.getLibVlcCoreLibraryName()) }.isSuccess &&
+            runCatching { NativeLibrary.getInstance(RuntimeUtil.getLibVlcLibraryName()) }.isSuccess
+    }
+
+    /** Standard VLC 3 (64-bit) install locations, checked without scanning the disk. */
+    private fun installedVlcDir(): File? {
+        val candidates = if (RuntimeUtil.isWindows()) {
+            listOfNotNull(System.getenv("ProgramFiles"), "C:\\Program Files").map { File(it, "VideoLAN\\VLC") }
+        } else if (RuntimeUtil.isMac()) {
+            listOf(File("/Applications/VLC.app/Contents/MacOS/lib"))
+        } else {
+            emptyList()
+        }
+        return candidates.firstOrNull { File(it, "libvlc.dll").isFile || File(it, "libvlc.dylib").isFile }
     }
 
     /** Bundled VLC folder inside the packaged app, or a `-Dwebpro.vlcDir=` override. */
