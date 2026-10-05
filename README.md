@@ -281,7 +281,7 @@ Aplicación de escritorio nativa (no es un emulador ni una web) con instalador *
 
 **Automático (recomendado)**: cada `push` ejecuta el workflow *Windows desktop* de GitHub Actions, que
 descarga libVLC 3.0.21 de VideoLAN, ejecuta las pruebas de reproducción con ese VLC en Windows y genera
-`WEBPRO PLAYER-1.0.0.exe` y `.msi` como *artifacts*. Al crear una etiqueta `v1.0.0` se publican además en
+`WEBPRO PLAYER-1.0.1.exe` y `.msi` como *artifacts*. Al crear una etiqueta `v1.0.1` se publican además en
 *Releases*.
 
 **Manual (en un PC con Windows 10/11 de 64 bits)**:

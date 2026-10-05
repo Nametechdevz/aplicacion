@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.webpro.player"
-version = "1.0.0"
+version = "1.0.1"
 
 /*
  * The Xtream API client, parsers, cache, use cases and player state model are
@@ -117,7 +117,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "WEBPRO PLAYER"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.1"
             description = "Reproductor IPTV compatible con Xtream Codes"
             vendor = "WEBPRO"
             copyright = "© 2026 WEBPRO. Todos los derechos reservados."

@@ -150,7 +150,7 @@ fun SettingsScreen() {
         }
 
         Card(S.ABOUT) {
-            Info(S.VERSION, System.getProperty("jpackage.app-version") ?: "1.0.0")
+            Info(S.VERSION, System.getProperty("jpackage.app-version") ?: "1.0.1")
             Info(S.ENGINE, if (VlcRuntime.initialize()) "libVLC 3 (VLC)" else "—")
             Spacer(Modifier.height(8.dp))
             Text(S.ABOUT_TEXT, style = MaterialTheme.typography.bodySmall, color = WebProColors.TextSecondary)
