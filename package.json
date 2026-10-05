@@ -139,7 +139,8 @@
         "provider": "github",
         "owner": "Nametechdevz",
         "repo": "aplicacion",
-        "releaseType": "release"
+        "releaseType": "release",
+        "tagNamePrefix": "whatsapp-crm-v"
       }
     ]
   }
