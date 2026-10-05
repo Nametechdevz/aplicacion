@@ -97,7 +97,7 @@ jobs:
           ./gradlew test --no-daemon --tests "*VlcPlaybackIntegrationTest*" --tests "*PlaybackLogicTest*" --tests "*DesktopStorageTest*"
           -Pwebpro.test.media="$RUNNER_TEMP/media"
           -Pwebpro.vlcDir="$GITHUB_WORKSPACE/desktop/resources/windows/vlc"
-          "-Pwebpro.vlc.args=--aout=dummy"
+          "-Pwebpro.vlc.args=--aout=dummy;--verbose=2"
       - name: Build installers
         run: ./gradlew packageExe packageMsi --no-daemon --stacktrace
       - name: Upload installers

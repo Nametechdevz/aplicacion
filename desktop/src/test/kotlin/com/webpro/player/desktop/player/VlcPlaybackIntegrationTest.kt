@@ -99,8 +99,8 @@ class VlcPlaybackIntegrationTest {
         sources = paths.map { StreamSource(server.url(it).toString(), it.substringAfterLast('.')) }
     )
 
-    private suspend fun awaitState(timeoutMs: Long, predicate: (PlayerState) -> Boolean): PlayerState? =
-        withTimeoutOrNull(timeoutMs) {
+    private suspend fun awaitState(timeoutMs: Long, predicate: (PlayerState) -> Boolean): PlayerState? {
+        val result = withTimeoutOrNull(timeoutMs) {
             while (true) {
                 val s = withContext(Dispatchers.Main) { manager.state.value }
                 if (predicate(s)) return@withTimeoutOrNull s
@@ -108,6 +108,20 @@ class VlcPlaybackIntegrationTest {
             }
             @Suppress("UNREACHABLE_CODE") null
         }
+        if (result == null) dumpThreads()
+        return result
+    }
+
+    /** Diagnostics for CI: where are the libVLC threads stuck? */
+    private fun dumpThreads() {
+        System.err.println("=== Thread dump (state=${manager.state.value}) ===")
+        Thread.getAllStackTraces().forEach { (thread, stack) ->
+            if (thread.name.contains("vlc", true) || thread.name.contains("AWT", true) || thread.name.contains("event", true)) {
+                System.err.println("Thread ${thread.name} (${thread.state})")
+                stack.take(25).forEach { System.err.println("    at $it") }
+            }
+        }
+    }
 
     @Test
     fun `live mpeg-ts with ac3 audio plays video frames and exposes the audio track`() = runBlocking {

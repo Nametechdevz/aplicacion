@@ -97,6 +97,7 @@ tasks.test {
     project.properties.filterKeys { it.startsWith("webpro.") }.forEach { (key, value) -> systemProperty(key, value.toString()) }
     testLogging {
         events("failed")
+        showStandardStreams = System.getenv("CI") != null
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
