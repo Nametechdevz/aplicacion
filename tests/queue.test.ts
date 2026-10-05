@@ -111,6 +111,25 @@ describe('Cola de mensajes', () => {
     expect(await env.app.worker.processNext(acc, { ignorePacing: true })).toBe(true);
   });
 
+  it('caída de red: no consume intentos, marca la cuenta desconectada y pausa campañas', async () => {
+    const tag = env.app.tags.findByName(acc, 'Cliente')!;
+    const c = env.app.contacts.create(acc, { name: 'Red', phone: '3001239999', tagIds: [tag.id] });
+    const camp = env.app.campaigns.saveDraft(acc, { name: 'Red', audience: { type: 'tag', tagIds: [tag.id] }, message_type: 'text', body: 'Hola' });
+    env.app.campaigns.confirm(acc, camp.id, 1);
+    env.sims.get(acc)!.failNext('TRANSIENT', 1, 'NETWORK');
+    await env.app.worker.processNext(acc, { ignorePacing: true });
+    await env.app.bus.drain();
+    const item = env.app.db.prepare('SELECT status, attempts FROM message_queue WHERE campaign_id = ?').get(camp.id) as any;
+    expect(item).toMatchObject({ status: 'queued', attempts: 0 });
+    expect(env.app.accounts.getProvider(acc)!.getStatus().status).toBe('disconnected');
+    expect(env.app.campaigns.get(acc, camp.id)).toMatchObject({ status: 'paused', pause_reason: 'disconnected' });
+    await env.app.accounts.connect(acc);
+    env.app.campaigns.resume(acc, camp.id);
+    env.clock.advance(11000); // reintento programado a +10 s
+    await drainQueue(env, acc);
+    expect(env.sims.get(acc)!.sent.map((s) => s.to)).toEqual([c.phone]);
+  });
+
   it('tope diario: frena envíos masivos pero deja pasar respuestas manuales', async () => {
     env.app.settings.set('sending', { dailyCap: 1 }, acc);
     const ids = [0, 1, 2].map((i) => env.app.contacts.create(acc, { name: 'C' + i, phone: '300777000' + i }).id);

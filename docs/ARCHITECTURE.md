@@ -44,9 +44,10 @@ src/
     app-context.ts            Composición (inyección de dependencias) de todos los servicios
     core/                     event-bus, logger (rotación), crypto (safeStorage/scrypt), clock, errors
     db/                       conexión, migraciones, esquema
-    repos/                    Acceso a datos (SQL parametrizado únicamente)
-    services/                 Lógica CRM: contacts, tags, segments, conversations, templates, media,
-                              import/export, tasks, pipeline, notes, users/auth, settings, backup, stats
+    services/                 Lógica CRM y acceso a datos (SQL parametrizado únicamente): contacts,
+                              tags, segments, custom-fields, conversations, messaging, templates,
+                              media, import/export, tasks + pipeline, compliance (opt-out, horario),
+                              users/auth, settings, history (auditoría), backup, stats
     whatsapp/                 WhatsAppProvider + CloudApiProvider + SimulatorProvider + AccountManager
                               + WebhookServer
     queue/                    QueueWorker (cola persistente) + rate limiter

@@ -276,6 +276,13 @@ export class QueueWorker {
         this.deps.onProviderFatal(item.account_id, err);
         return;
       case 'TRANSIENT':
+        if (err.providerCode === 'NETWORK') {
+          // Sin red: no es culpa del mensaje. No consume intentos; la cuenta pasa a desconectada
+          // (se pausan las campañas) y se reconecta automáticamente.
+          this.requeue(item, 10000, err, false);
+          this.deps.onProviderFatal(item.account_id, err);
+          return;
+        }
         if (item.attempts < item.max_attempts) {
           const delay = Math.min(3600000, s.retryBaseSeconds * 1000 * 2 ** (item.attempts - 1));
           this.requeue(item, delay, err, true);

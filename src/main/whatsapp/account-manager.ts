@@ -283,8 +283,8 @@ export class AccountManager {
   onProviderFatal(id: number, err: ProviderError) {
     const p = this.providers.get(id);
     if (!p) return;
-    if (err.kind === 'DISCONNECTED' && p.getStatus().status === 'connected') {
-      (p as any).setStatus?.({ status: 'disconnected', detail: 'Conexión perdida durante un envío' });
+    if ((err.kind === 'DISCONNECTED' || err.providerCode === 'NETWORK') && p.getStatus().status === 'connected') {
+      (p as any).setStatus?.({ status: 'disconnected', detail: err.providerCode === 'NETWORK' ? 'Sin conexión con WhatsApp (red). Reintentando…' : 'Conexión perdida durante un envío' });
       return;
     }
     if (err.kind === 'AUTH' || err.kind === 'ACCOUNT_BLOCKED') (p as any).setStatus?.({ status: 'error', detail: err.message });
