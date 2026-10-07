@@ -1,0 +1,8 @@
+# Para hostings donde no se puede apuntar el dominio a /public
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(app|config|database|storage|bin)(/|$) - [F,L]
+    RewriteRule ^$ public/ [L]
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
