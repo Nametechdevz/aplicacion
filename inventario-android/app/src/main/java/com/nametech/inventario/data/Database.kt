@@ -1,0 +1,105 @@
+package com.nametech.inventario.data
+
+import android.content.Context
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface ItemDao {
+    @Query("SELECT * FROM items ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<Item>>
+
+    @Query("SELECT * FROM items")
+    suspend fun getAll(): List<Item>
+
+    @Query("SELECT * FROM items WHERE id = :id")
+    suspend fun get(id: Long): Item?
+
+    @Insert
+    suspend fun insert(item: Item): Long
+
+    @Insert
+    suspend fun insertAll(items: List<Item>)
+
+    @Update
+    suspend fun update(item: Item)
+
+    @Delete
+    suspend fun delete(item: Item)
+
+    @Query("DELETE FROM items")
+    suspend fun clear()
+}
+
+@Dao
+interface ClientDao {
+    @Query("SELECT * FROM clients ORDER BY name COLLATE NOCASE")
+    fun observeAll(): Flow<List<Client>>
+
+    @Query("SELECT * FROM clients")
+    suspend fun getAll(): List<Client>
+
+    @Query("SELECT * FROM clients WHERE id = :id")
+    suspend fun get(id: Long): Client?
+
+    @Insert
+    suspend fun insert(client: Client): Long
+
+    @Insert
+    suspend fun insertAll(clients: List<Client>)
+
+    @Update
+    suspend fun update(client: Client)
+
+    @Delete
+    suspend fun delete(client: Client)
+
+    @Query("DELETE FROM clients")
+    suspend fun clear()
+}
+
+@Dao
+interface SaleDao {
+    @Query("SELECT * FROM sales ORDER BY date DESC, createdAt DESC")
+    fun observeAll(): Flow<List<Sale>>
+
+    @Query("SELECT * FROM sales")
+    suspend fun getAll(): List<Sale>
+
+    @Insert
+    suspend fun insert(sale: Sale): Long
+
+    @Insert
+    suspend fun insertAll(sales: List<Sale>)
+
+    @Delete
+    suspend fun delete(sale: Sale)
+
+    @Query("UPDATE sales SET itemId = NULL WHERE itemId = :itemId")
+    suspend fun detachItem(itemId: Long)
+
+    @Query("UPDATE sales SET clientId = NULL WHERE clientId = :clientId")
+    suspend fun detachClient(clientId: Long)
+
+    @Query("DELETE FROM sales")
+    suspend fun clear()
+}
+
+@Database(entities = [Item::class, Client::class, Sale::class], version = 1, exportSchema = true)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun items(): ItemDao
+    abstract fun clients(): ClientDao
+    abstract fun sales(): SaleDao
+
+    companion object {
+        fun build(context: Context): AppDatabase =
+            Room.databaseBuilder(context, AppDatabase::class.java, "inventario.db").build()
+    }
+}
