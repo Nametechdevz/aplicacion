@@ -109,15 +109,25 @@ export function verifyPassword(row: UserRow, password: string): boolean {
   return bcrypt.compareSync(password, row.password_hash);
 }
 
+/**
+ * Crea la cuenta de la central si no existe. Si ya existe y ADMIN_PASSWORD cambió, actualiza la contraseña:
+ * así se puede cambiar (o recuperar) editando el archivo .env y reiniciando.
+ */
 export function ensureAdmin(db: DB, email: string, password: string, name: string): void {
   const existing = getUserByEmail(db, email);
-  if (existing) return;
   if (!password) {
-    console.warn('[admin] ADMIN_PASSWORD no definido: no se crea la cuenta de administrador.');
+    if (!existing) console.warn('[admin] ADMIN_PASSWORD no definido: no se crea la cuenta de la central.');
     return;
   }
-  createUser(db, { role: 'admin', name, email, phone: '', password, status: 'active' });
-  console.log(`[admin] Cuenta de administrador creada: ${email}`);
+  if (!existing) {
+    createUser(db, { role: 'admin', name, email, phone: '', password, status: 'active' });
+    console.log(`[admin] Cuenta de la central creada: ${email}`);
+    return;
+  }
+  if (existing.role === 'admin' && !verifyPassword(existing, password)) {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(password, 10), existing.id);
+    console.log(`[admin] Contraseña de la central actualizada desde ADMIN_PASSWORD (${email}).`);
+  }
 }
 
 export function signToken(secret: string, user: Pick<UserRow, 'id' | 'role'>): string {

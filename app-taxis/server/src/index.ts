@@ -1,5 +1,11 @@
+import { existsSync } from 'node:fs';
 import { loadConfig } from './config';
 import { createApp } from './app';
+
+// Variables de un archivo .env en la carpeta de la app (las del sistema/panel tienen prioridad).
+if (existsSync('.env')) {
+  process.loadEnvFile('.env');
+}
 
 const config = loadConfig();
 const server = createApp(config);

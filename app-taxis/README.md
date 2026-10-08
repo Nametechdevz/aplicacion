@@ -40,10 +40,20 @@ npm run dev
 Para probar el flujo completo en un solo ordenador abre tres ventanas (una normal y dos de incógnito): pasajero, conductor y central.
 El conductor puede usar el botón **▶ Simular** durante un viaje para que el coche recorra la ruta sin moverse de la silla, y si el navegador no da GPS puede **tocar el mapa** para fijar su posición.
 
-## Producción
+## Subir a un hosting
 
 ```bash
-cp .env.example .env      # rellena JWT_SECRET y ADMIN_PASSWORD como mínimo
+npm run package:hosting      # → release/taxiya-servidor-<versión>.zip
+```
+
+El zip trae el servidor compilado, la app web, las dependencias (sin nada que compilar), `app.cjs` como archivo de arranque y un
+**`LEEME.md` con los pasos para cPanel/Plesk («Setup Node.js App»), VPS con PM2 y Render/Railway**. GitHub también lo publica
+automáticamente en *Releases → `taxiya-servidor`*. Requiere un hosting con **Node.js 22.13+** (un hosting solo PHP no sirve).
+
+## Producción (desde el código)
+
+```bash
+cp .env.example .env      # rellena ADMIN_EMAIL y ADMIN_PASSWORD como mínimo
 npm ci
 npm run build
 npm start                 # http://localhost:3000

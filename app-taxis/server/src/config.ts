@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 export interface Config {
   port: number;
@@ -30,17 +32,19 @@ function num(v: string | undefined, def: number): number {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const dbPath = env.DB_PATH ?? 'data/taxis.db';
   let jwtSecret = env.JWT_SECRET ?? '';
   if (!jwtSecret) {
-    if (env.NODE_ENV === 'production') {
-      throw new Error('JWT_SECRET es obligatorio en producción.');
+    if (dbPath === ':memory:') {
+      jwtSecret = randomBytes(32).toString('hex');
+    } else {
+      // Sin JWT_SECRET se genera uno y se guarda junto a la base de datos para que las sesiones sobrevivan a los reinicios.
+      jwtSecret = persistentSecret(join(dirname(dbPath), 'jwt-secret'));
     }
-    jwtSecret = randomBytes(32).toString('hex');
-    console.warn('[config] JWT_SECRET no definido: se usa uno aleatorio (las sesiones se perderán al reiniciar).');
   }
   return {
     port: num(env.PORT, 3000),
-    dbPath: env.DB_PATH ?? 'data/taxis.db',
+    dbPath,
     jwtSecret,
     adminEmail: (env.ADMIN_EMAIL ?? 'admin@taxis.local').toLowerCase(),
     adminPassword: env.ADMIN_PASSWORD ?? '',
@@ -54,4 +58,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     corsOrigin: env.CORS_ORIGIN ?? '',
     clientDir: env.CLIENT_DIR ?? 'client/dist',
   };
+}
+
+function persistentSecret(file: string): string {
+  if (existsSync(file)) {
+    const v = readFileSync(file, 'utf8').trim();
+    if (v.length >= 32) return v;
+  }
+  mkdirSync(dirname(file), { recursive: true });
+  const v = randomBytes(32).toString('hex');
+  writeFileSync(file, v, { mode: 0o600 });
+  console.log(`[config] JWT_SECRET no definido: se generó uno y se guardó en ${file}`);
+  return v;
 }

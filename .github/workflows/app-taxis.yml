@@ -4,6 +4,10 @@ on:
     paths: ['app-taxis/**', '.github/workflows/app-taxis.yml']
   pull_request:
     paths: ['app-taxis/**', '.github/workflows/app-taxis.yml']
+
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,3 +25,25 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+      - name: Empaquetar para hosting
+        if: github.event_name == 'push'
+        run: node scripts/package-hosting.mjs
+
+      - name: Publicar en Releases (taxiya-servidor)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Servidor de TaxiYa listo para subir a un hosting con Node.js 22.13+ (cPanel/Plesk, VPS, Render…)."
+            echo "Compilado desde la rama \`$GITHUB_REF_NAME\` (commit ${GITHUB_SHA::7})."
+            echo
+            echo "Descarga el zip, descomprímelo en tu hosting y sigue los pasos de \`LEEME.md\`."
+          } > notes.md
+          gh release delete taxiya-servidor --yes --cleanup-tag || true
+          gh release create taxiya-servidor release/*.zip \
+            --target "$GITHUB_SHA" \
+            --title "TaxiYa servidor (hosting)" \
+            --prerelease --latest=false \
+            --notes-file notes.md
