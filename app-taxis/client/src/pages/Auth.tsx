@@ -3,6 +3,76 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { errorMessage } from '../api';
 import { Alert, Spinner } from '../components/ui';
+import { checkServer, isNative, needsServer, normalize, serverUrl, setServerUrl } from '../server';
+
+/** Pantalla para indicar a qué servidor se conecta la app Android. */
+export function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
+  const [url, setUrl] = useState(serverUrl());
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await checkServer(url);
+      setServerUrl(url);
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth-page">
+      <Brand />
+      <form className="card form" onSubmit={submit}>
+        <h2>Conectar con tu servidor</h2>
+        <p className="muted small">
+          Escribe la dirección donde está instalado el servidor de TaxiYa (te la da quien gestiona la central), por ejemplo{' '}
+          <code>https://taxis.midominio.com</code>.
+        </p>
+        <Alert>{error}</Alert>
+        <label>
+          Dirección del servidor
+          <input
+            type="url"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            required
+            placeholder="https://…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </label>
+        <button className="btn primary block" disabled={busy}>
+          {busy ? <Spinner /> : 'Conectar'}
+        </button>
+        {onCancel && (
+          <button type="button" className="btn block" onClick={onCancel}>
+            Volver
+          </button>
+        )}
+      </form>
+    </main>
+  );
+}
+
+function ServerLine({ onChange }: { onChange: () => void }) {
+  if (!isNative() && !serverUrl()) return null;
+  return (
+    <p className="center muted small">
+      Servidor: {normalize(serverUrl()).replace(/^https?:\/\//, '')} ·{' '}
+      <button type="button" className="link-btn" onClick={onChange}>
+        Cambiar
+      </button>
+    </p>
+  );
+}
 
 function Brand() {
   return (
@@ -21,6 +91,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editServer, setEditServer] = useState(needsServer());
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -35,6 +106,8 @@ export function Login() {
       setBusy(false);
     }
   }
+
+  if (editServer) return <ServerSetup onDone={() => setEditServer(false)} onCancel={needsServer() ? undefined : () => setEditServer(false)} />;
 
   return (
     <main className="auth-page">
@@ -56,6 +129,7 @@ export function Login() {
         <p className="center muted">
           ¿No tienes cuenta? <Link to="/registro">Regístrate</Link>
         </p>
+        <ServerLine onChange={() => setEditServer(true)} />
       </form>
     </main>
   );
@@ -68,6 +142,7 @@ export function Register() {
   const [f, setF] = useState({ name: '', email: '', phone: '', password: '', make: '', model: '', plate: '', color: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editServer, setEditServer] = useState(needsServer());
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   async function submit(e: FormEvent) {
@@ -90,6 +165,8 @@ export function Register() {
       setBusy(false);
     }
   }
+
+  if (editServer) return <ServerSetup onDone={() => setEditServer(false)} />;
 
   return (
     <main className="auth-page">

@@ -1,5 +1,6 @@
 import { useAuth } from '../auth';
 import { Avatar, Rating } from '../components/ui';
+import { isNative, serverUrl } from '../server';
 
 const ROLE: Record<string, string> = { passenger: 'Pasajero', driver: 'Conductor', admin: 'Administrador' };
 const STATUS: Record<string, string> = { active: 'Activa', pending: 'Pendiente de aprobación', blocked: 'Bloqueada' };
@@ -24,6 +25,12 @@ export default function Profile() {
               <dd>{user.phone}</dd>
             </>
           )}
+          {(isNative() || serverUrl()) && (
+            <>
+              <dt>Servidor</dt>
+              <dd>{serverUrl()}</dd>
+            </>
+          )}
           <dt>Estado de la cuenta</dt>
           <dd>{STATUS[user.status]}</dd>
           {user.vehicle && (
@@ -46,7 +53,7 @@ export default function Profile() {
 
 function InstallHint() {
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches;
-  if (standalone) return null;
+  if (standalone || isNative()) return null;
   return (
     <div className="alert info">
       <strong>Instala TaxiYa en tu móvil:</strong> en Android abre el menú ⋮ de Chrome y elige «Instalar aplicación»; en iPhone toca

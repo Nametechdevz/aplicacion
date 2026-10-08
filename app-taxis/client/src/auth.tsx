@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { io, type Socket } from 'socket.io-client';
 import type { PublicUser } from '../../shared/types';
 import { api, getToken, setToken } from './api';
+import { serverUrl } from './server';
 
 interface AuthState {
   user: PublicUser | null;
@@ -48,7 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = user?.id;
   useEffect(() => {
     if (!userId) return;
-    const s = io({ auth: { token: getToken() }, transports: ['websocket', 'polling'] });
+    const opts = { auth: { token: getToken() }, transports: ['websocket', 'polling'] };
+    const base = serverUrl();
+    const s = base ? io(base, opts) : io(opts);
     s.on('connect', () => setConnected(true));
     s.on('disconnect', () => setConnected(false));
     s.on('connect_error', (err) => {

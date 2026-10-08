@@ -1,0 +1,11 @@
+{
+  "appId": "com.nametech.taxiya",
+  "appName": "TaxiYa",
+  "webDir": "client/dist",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

@@ -1,3 +1,5 @@
+import { serverUrl } from './server';
+
 const TOKEN_KEY = 'taxiya.token';
 
 export function getToken(): string | null {
@@ -30,7 +32,7 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
   const token = getToken();
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${serverUrl()}/api${path}`, {
       method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
       headers: {
         ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),

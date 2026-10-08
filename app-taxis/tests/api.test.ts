@@ -282,6 +282,18 @@ describe('API de la App de Taxis', () => {
     expect((await call('POST', '/auth/login', undefined, { email: 'carlos@test.local', password: 'secreta123' })).status).toBe(403);
   });
 
+  it('permite peticiones desde la app Android (CORS) y no desde otros sitios', async () => {
+    const pre = await fetch(`${base}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://localhost', 'Access-Control-Request-Method': 'POST' },
+    });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get('access-control-allow-origin')).toBe('https://localhost');
+    expect(pre.headers.get('access-control-allow-headers')).toContain('Authorization');
+    const evil = await fetch(`${base}/api/health`, { headers: { Origin: 'https://sitio-malo.example' } });
+    expect(evil.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
   it('rechaza peticiones sin sesión', async () => {
     expect((await call('GET', '/me')).status).toBe(401);
     expect((await call('GET', '/me', 'token-falso')).status).toBe(401);

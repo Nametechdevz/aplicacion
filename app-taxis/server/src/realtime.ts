@@ -73,12 +73,12 @@ export function createRealtime(
   http: HttpServer,
   db: DB,
   jwtSecret: string,
-  corsOrigin: string,
+  corsOrigins: string[],
   hooksRef: { current: RealtimeHooks | null },
 ): Realtime {
   const io = new Server(http, {
     path: '/socket.io',
-    cors: corsOrigin ? { origin: corsOrigin.split(',').map((s) => s.trim()) } : undefined,
+    cors: { origin: corsOrigins },
   });
   const drivers = new DriverRegistry();
   const offlineTimers = new Map<number, NodeJS.Timeout>();

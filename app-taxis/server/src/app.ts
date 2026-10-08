@@ -66,6 +66,18 @@ const idParam = (req: Request) => {
   return id;
 };
 
+export const NATIVE_APP_ORIGINS = ['https://localhost', 'capacitor://localhost'];
+
+export function corsOrigins(configured: string): string[] {
+  return [
+    ...configured
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    ...NATIVE_APP_ORIGINS,
+  ];
+}
+
 export function createApp(config: Config, opts: { geo?: Geo } = {}) {
   const db = openDb(config.dbPath);
   ensureAdmin(db, config.adminEmail, config.adminPassword, config.adminName);
@@ -76,7 +88,7 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
   app.set('trust proxy', 1);
   const http = createServer(app);
   const hooks: { current: RealtimeHooks | null } = { current: null };
-  const rt = createRealtime(http, db, config.jwtSecret, config.corsOrigin, hooks);
+  const rt = createRealtime(http, db, config.jwtSecret, corsOrigins(config.corsOrigin), hooks);
   const rides = createRideService(db, config, geo, rt);
   hooks.current = {
     onDriverLocation: (id, loc, heading) => rides.onDriverLocation(id, loc, heading),
@@ -93,20 +105,21 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
     if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  if (config.corsOrigin) {
-    const allowed = config.corsOrigin.split(',').map((s) => s.trim());
-    app.use('/api', (req, res, next) => {
-      const origin = req.headers.origin;
-      if (origin && allowed.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Vary', 'Origin');
-        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
-      }
-      if (req.method === 'OPTIONS') return void res.sendStatus(204);
-      next();
-    });
-  }
+  // Orígenes permitidos: los configurados + los de la app Android/iOS (Capacitor), que cargan la interfaz desde
+  // https://localhost o capacitor://localhost. La sesión viaja en la cabecera Authorization (no en cookies).
+  const allowed = corsOrigins(config.corsOrigin);
+  app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowed.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
+      res.setHeader('Access-Control-Max-Age', '600');
+    }
+    if (req.method === 'OPTIONS') return void res.sendStatus(204);
+    next();
+  });
 
   // Limitador simple para los intentos de inicio de sesión y registro.
   const attempts = new Map<string, { n: number; reset: number }>();

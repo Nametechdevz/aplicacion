@@ -1,6 +1,6 @@
 # 🚕 TaxiYa — App de Taxis
 
-Aplicación web móvil (PWA, instalable en Android e iPhone) para pedir taxis, con **tres perfiles**:
+Aplicación para pedir taxis: web móvil (PWA, instalable en Android e iPhone) y **app Android (APK)**, con **tres perfiles**:
 
 | Perfil | Qué puede hacer |
 | --- | --- |
@@ -65,6 +65,43 @@ docker run -d -p 3000:3000 -v taxiya-data:/data \
 
 Todas las variables están documentadas en [`.env.example`](.env.example).
 
+## App Android (APK)
+
+La carpeta `android/` contiene la app nativa (Capacitor): es la misma interfaz, empaquetada dentro del APK, con permisos de GPS y vibración.
+
+**Descargar:** GitHub compila el APK automáticamente con cada cambio en `app-taxis/` (workflow *App de Taxis (APK Android)*) y lo publica en
+**Releases → `taxiya-apk`**. Abre esa página desde el móvil, descarga el `.apk` e instálalo (Android pedirá permitir instalar apps de esa fuente).
+
+**Primer uso:** la app pregunta la **dirección del servidor** (por ejemplo `https://taxis.midominio.com`), que debe ser accesible desde el móvil.
+Para que venga ya configurada, ejecuta el workflow a mano (*Actions → App de Taxis (APK Android) → Run workflow*) indicando `server_url`,
+o crea la variable de repositorio `TAXIYA_SERVER_URL` (*Settings → Secrets and variables → Actions → Variables*).
+El servidor ya acepta peticiones de la app (orígenes `https://localhost` y `capacitor://localhost`); no hace falta configurar CORS.
+
+> Para probar en la red de casa puedes usar `http://IP-DE-TU-PC:3000`, pero el GPS de Android solo funciona fiable con HTTPS en el servidor
+> de producción. Para uso real, usa siempre HTTPS.
+
+**Firma y actualizaciones:** sin configuración, el APK se firma con una clave de depuración distinta en cada compilación, así que para
+instalar una versión nueva hay que **desinstalar la anterior**. Para firmar siempre con tu clave (necesario para actualizar sin desinstalar
+y para Google Play), crea una vez el almacén de claves y guárdalo en los secretos del repositorio:
+
+```bash
+keytool -genkeypair -v -keystore taxiya.keystore -alias taxiya -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 taxiya.keystore   # copia el resultado
+```
+
+Secretos (*Settings → Secrets and variables → Actions → Secrets*): `ANDROID_KEYSTORE_BASE64` (el texto en base64), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` (`taxiya`) y `ANDROID_KEY_PASSWORD`. **Guarda el archivo `.keystore` en un lugar seguro**: si lo pierdes no podrás publicar
+actualizaciones de la misma app.
+
+**Compilar en tu ordenador** (requiere Android Studio o el Android SDK y JDK 21):
+
+```bash
+VITE_SERVER_URL=https://taxis.midominio.com npm run android:apk
+# → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Los iconos y la pantalla de inicio se generan desde `assets/` con `npx @capacitor/assets generate --android`.
+
 ## Cómo funciona un viaje
 
 ```
@@ -97,6 +134,8 @@ node tests/e2e.mjs test-results
 
 ```
 server/src/   API (app.ts), viajes (rides.ts), tiempo real (realtime.ts), usuarios y sesiones (users.ts), mapas (geo.ts), SQLite (db.ts)
+android/      Proyecto Android (Capacitor) para generar el APK
+assets/       Imágenes de origen del icono y la pantalla de inicio de la app
 client/src/   PWA: pages/Passenger.tsx, pages/Driver.tsx, pages/Admin.tsx, componentes de mapa y UI
 shared/       Código común: tipos, cálculo de tarifas y estados del viaje
 tests/        Pruebas unitarias, de API y E2E
