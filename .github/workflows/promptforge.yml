@@ -1,0 +1,38 @@
+name: PromptForge AI
+
+on:
+  push:
+    branches: ['**']
+    paths: ['promptforge/**', '.github/workflows/promptforge.yml']
+  pull_request:
+    paths: ['promptforge/**', '.github/workflows/promptforge.yml']
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: promptforge
+
+jobs:
+  check:
+    name: Typecheck, tests, build y E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: promptforge/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: promptforge/test-results

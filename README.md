@@ -10,6 +10,8 @@ estadísticas, multicuenta, multiusuario, backups y auto-actualización**.
   **código QR** (Baileys, no oficial; ver riesgos en la sección 6).
 - Interfaz en español, tema oscuro por defecto (también claro).
 
+> **Nota:** este repositorio también contiene **PROMPTFORGE AI** (generador de prompts maestros para Claude Code) en la carpeta [`promptforge/`](promptforge/README.md), con su propio `package.json`, documentación y CI.
+
 > Arquitectura detallada (decisiones, base de datos, cola, motores): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
