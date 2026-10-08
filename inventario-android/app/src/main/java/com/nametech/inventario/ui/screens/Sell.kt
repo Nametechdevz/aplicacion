@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nametech.inventario.data.ItemStatus
 import com.nametech.inventario.domain.Category
+import com.nametech.inventario.domain.Stock
 import com.nametech.inventario.ui.AppViewModel
 import com.nametech.inventario.ui.Nav
 import com.nametech.inventario.ui.components.CategoryAvatar
@@ -77,6 +79,10 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
         return
     }
     val editing = item.status == ItemStatus.SOLD
+    val stock = Stock(items.orEmpty())
+    val isAccountSale = !editing && stock.hasProfiles(item)
+    val freeProfiles = if (isAccountSale) stock.freeProfiles(item) else emptyList()
+    val canSellFull = stock.canSellFull(item)
 
     var initialized by rememberSaveable { mutableStateOf(false) }
     var useExisting by rememberSaveable { mutableStateOf(false) }
@@ -91,6 +97,9 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
     var paid by rememberSaveable { mutableStateOf(true) }
     var sendNow by rememberSaveable { mutableStateOf(!editing) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    // Cuenta con perfiles: vender completa o un perfil.
+    var sellFull by rememberSaveable { mutableStateOf(true) }
+    var profileId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(item.id) {
         if (initialized) return@LaunchedEffect
@@ -106,6 +115,13 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
             useExisting = !clients.isNullOrEmpty()
             clientExp = LocalDate.ofEpochDay(today).plusMonths(s.defaultSaleMonths.toLong()).toEpochDay()
             price = Fmt.plain(item.suggestedPrice)
+            if (isAccountSale) {
+                sellFull = canSellFull
+                if (!canSellFull) {
+                    profileId = freeProfiles.firstOrNull()?.id
+                    price = Fmt.plain(freeProfiles.firstOrNull()?.suggestedPrice ?: 0.0)
+                }
+            }
         }
         initialized = true
     }
@@ -119,9 +135,17 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
             error = "Escribe el nombre del cliente"
             return
         }
+        val targetId = if (isAccountSale && !sellFull) {
+            profileId ?: run {
+                error = "Elige el perfil que vas a vender"
+                return
+            }
+        } else {
+            item.id
+        }
         scope.launch {
             val result = vm.repo.sell(
-                itemId = item.id,
+                itemId = targetId,
                 clientId = if (useExisting) clientId else null,
                 newClientName = newName,
                 newClientPhone = newPhone,
@@ -129,7 +153,11 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
                 price = Fmt.parseMoney(price),
                 clientExpiration = clientExp,
                 paid = paid,
-            ) ?: return@launch
+            )
+            if (result == null) {
+                error = "No se pudo vender: la cuenta o el perfil ya no está disponible"
+                return@launch
+            }
             if (sendNow) sendCredentials(context, s, today, result.first, result.second)
             nav.back()
         }
@@ -156,6 +184,54 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                }
+            }
+
+            if (isAccountSale) {
+                Text("¿Qué vas a vender?", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = sellFull,
+                        onClick = { sellFull = true; price = Fmt.plain(item.suggestedPrice); error = null },
+                        enabled = canSellFull,
+                        shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    ) { Text("Cuenta completa") }
+                    SegmentedButton(
+                        selected = !sellFull,
+                        onClick = {
+                            sellFull = false
+                            val p = freeProfiles.firstOrNull { it.id == profileId } ?: freeProfiles.firstOrNull()
+                            profileId = p?.id
+                            price = Fmt.plain(p?.suggestedPrice ?: 0.0)
+                            error = null
+                        },
+                        enabled = freeProfiles.isNotEmpty(),
+                        shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    ) { Text("Un perfil") }
+                }
+                if (sellFull) {
+                    Text(
+                        "Se vende la cuenta entera (${stock.profilesOf(item).size} perfiles) a un solo cliente.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text("Perfiles libres: ${freeProfiles.size} de ${stock.profilesOf(item).size}", style = MaterialTheme.typography.bodySmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        freeProfiles.forEach { p ->
+                            FilterChip(
+                                selected = profileId == p.id,
+                                onClick = { profileId = p.id; price = Fmt.plain(p.suggestedPrice); error = null },
+                                label = { Text(p.profilePin.ifBlank { "Perfil" } + if (p.suggestedPrice > 0) " · ${Fmt.money(p.suggestedPrice, s)}" else "") },
+                            )
+                        }
+                    }
+                }
+                if (!canSellFull) {
+                    Text(
+                        "La cuenta completa no se puede vender porque ya tiene perfiles vendidos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 

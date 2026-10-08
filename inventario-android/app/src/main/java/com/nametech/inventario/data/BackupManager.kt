@@ -39,14 +39,14 @@ class BackupManager(private val context: Context, private val repo: InventoryRep
     suspend fun exportItemsCsv(uri: Uri) = withContext(Dispatchers.IO) {
         val clients = repo.allClients().associateBy { it.id }
         val header = listOf(
-            "ID", "Categoría", "Servicio", "Plan", "Usuario", "Clave", "Perfil/PIN", "Link", "Proveedor",
+            "ID", "Tipo", "Cuenta (ID)", "Categoría", "Servicio", "Plan", "Usuario", "Clave", "Perfil/PIN", "Link", "Proveedor",
             "Costo", "Precio sugerido", "Fecha compra", "Vence cuenta", "Estado", "Cliente", "WhatsApp",
             "Fecha venta", "Precio venta", "Vence cliente", "Pagado", "Notas",
         )
         val rows = repo.allItems().map { i ->
             val c = i.clientId?.let { clients[it] }
             listOf(
-                i.id.toString(), Category.of(i.category).label, i.name, i.plan, i.accessUser, i.accessPassword,
+                i.id.toString(), kindLabel(i.kind), i.parentId?.toString().orEmpty(), Category.of(i.category).label, i.name, i.plan, i.accessUser, i.accessPassword,
                 i.profilePin, i.accessUrl, i.supplier, Fmt.plain(i.costPrice), Fmt.plain(i.suggestedPrice),
                 Fmt.date(i.purchaseDate), Fmt.date(i.expirationDate), statusLabel(i.status), c?.name.orEmpty(),
                 c?.whatsapp.orEmpty(), Fmt.date(i.saleDate), Fmt.plain(i.salePrice), Fmt.date(i.clientExpirationDate),
@@ -79,6 +79,12 @@ class BackupManager(private val context: Context, private val repo: InventoryRep
         return "﻿" + (listOf(header) + rows).joinToString("\r\n") { r -> r.joinToString(";") { esc(it) } }
     }
 
+    private fun kindLabel(k: String) = when (k) {
+        ItemKind.ACCOUNT -> "Cuenta completa"
+        ItemKind.PROFILE -> "Perfil"
+        else -> "Individual"
+    }
+
     private fun statusLabel(s: String) = when (s) {
         ItemStatus.AVAILABLE -> "Disponible"
         ItemStatus.SOLD -> "Vendida"
@@ -100,6 +106,7 @@ private fun Item.toJson() = JSONObject()
     .put("salePrice", salePrice).put("clientExpirationDate", clientExpirationDate ?: JSONObject.NULL)
     .put("paid", paid).put("lastReminderAt", lastReminderAt ?: JSONObject.NULL).put("notes", notes)
     .put("createdAt", createdAt).put("updatedAt", updatedAt)
+    .put("kind", kind).put("parentId", parentId ?: JSONObject.NULL)
 
 private fun JSONObject.toItem() = Item(
     id = getLong("id"), category = optString("category", "OTRO"), name = optString("name"), plan = optString("plan"),
@@ -113,6 +120,7 @@ private fun JSONObject.toItem() = Item(
     paid = optBoolean("paid", true), lastReminderAt = optLongOrNull("lastReminderAt"), notes = optString("notes"),
     createdAt = optLong("createdAt", System.currentTimeMillis()),
     updatedAt = optLong("updatedAt", System.currentTimeMillis()),
+    kind = optString("kind", ItemKind.SINGLE), parentId = optLongOrNull("parentId"),
 )
 
 private fun Client.toJson() = JSONObject()

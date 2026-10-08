@@ -2,6 +2,8 @@ package com.nametech.inventario.domain
 
 import com.nametech.inventario.data.Item
 import com.nametech.inventario.data.ItemStatus
+import com.nametech.inventario.data.isAccount
+import com.nametech.inventario.data.isProfile
 import java.time.LocalDate
 
 /** Tipos de producto que vende el negocio. */
@@ -112,4 +114,43 @@ fun Item.matchesQuery(query: String, clientName: String?): Boolean {
     val q = query.trim().lowercase()
     return listOf(name, plan, accessUser, profilePin, supplier, notes, clientName.orEmpty(), Category.of(category).label)
         .any { it.lowercase().contains(q) }
+}
+
+/**
+ * Vista del inventario que entiende las cuentas completas con perfiles:
+ * los perfiles libres se muestran dentro de su cuenta; los vendidos aparecen como ventas normales.
+ */
+class Stock(val all: List<Item>) {
+    private val byId = all.associateBy { it.id }
+    private val children: Map<Long, List<Item>> =
+        all.filter { it.parentId != null }.groupBy { it.parentId!! }.mapValues { (_, v) -> v.sortedBy { it.createdAt } }
+
+    /** Lo que se lista en el inventario (sin perfiles libres ni perfiles dados de baja). */
+    val visible: List<Item> = all.filter { !(it.isProfile && it.status != ItemStatus.SOLD && byId.containsKey(it.parentId)) }
+
+    fun profilesOf(account: Item): List<Item> = children[account.id].orEmpty()
+
+    fun parentOf(item: Item): Item? = item.parentId?.let { byId[it] }
+
+    fun hasProfiles(item: Item): Boolean = item.isAccount && profilesOf(item).isNotEmpty()
+
+    /** Perfiles que se pueden vender (ninguno si la cuenta se vendió completa o está inactiva). */
+    fun freeProfiles(account: Item): List<Item> =
+        if (account.status != ItemStatus.AVAILABLE) emptyList()
+        else profilesOf(account).filter { it.status == ItemStatus.AVAILABLE }
+
+    fun soldProfiles(account: Item): List<Item> = profilesOf(account).filter { it.status == ItemStatus.SOLD }
+
+    /** La cuenta completa solo se puede vender si ningún perfil está vendido. */
+    fun canSellFull(account: Item): Boolean = account.status == ItemStatus.AVAILABLE && soldProfiles(account).isEmpty()
+
+    fun matches(item: Item, filter: Filter, today: Long, dueSoonDays: Int): Boolean {
+        if (filter == Filter.AVAILABLE && hasProfiles(item) && item.status == ItemStatus.AVAILABLE) {
+            return freeProfiles(item).isNotEmpty() && item.timeState(today, dueSoonDays) != TimeState.EXPIRED
+        }
+        return item.matches(filter, today, dueSoonDays)
+    }
+
+    fun count(filter: Filter, today: Long, dueSoonDays: Int, from: List<Item> = visible): Int =
+        from.count { matches(it, filter, today, dueSoonDays) }
 }

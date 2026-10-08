@@ -25,7 +25,10 @@ class InventoryRepository(private val db: AppDatabase) {
     suspend fun saveItem(item: Item, copies: Int = 1): Long {
         val now = System.currentTimeMillis()
         if (item.id != 0L) {
-            itemDao.update(item.copy(updatedAt = now))
+            db.withTransaction {
+                itemDao.update(item.copy(updatedAt = now))
+                if (item.isAccount) syncProfiles(item)
+            }
             return item.id
         }
         if (copies <= 1) return itemDao.insert(item.copy(createdAt = now, updatedAt = now))
@@ -38,6 +41,67 @@ class InventoryRepository(private val db: AppDatabase) {
             }
         }
         return firstId
+    }
+
+    /** Datos de la cuenta que comparten todos sus perfiles. */
+    private fun Item.withAccountData(account: Item) = copy(
+        category = account.category,
+        name = account.name,
+        plan = account.plan,
+        accessUser = account.accessUser,
+        accessPassword = account.accessPassword,
+        accessUrl = account.accessUrl,
+        extraInfo = account.extraInfo,
+        supplier = account.supplier,
+        purchaseDate = account.purchaseDate,
+        expirationDate = account.expirationDate,
+    )
+
+    /** Si se cambia la clave, el correo o el vencimiento de la cuenta, se copia a sus perfiles. */
+    private suspend fun syncProfiles(account: Item) {
+        itemDao.profilesOf(account.id).forEach { p ->
+            itemDao.update(p.withAccountData(account).copy(updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    /**
+     * Crea una cuenta completa con sus perfiles. [profiles] = nombre/PIN y precio de cada perfil.
+     * El costo de la cuenta se reparte entre los perfiles para calcular la ganancia por perfil.
+     */
+    suspend fun createAccount(account: Item, profiles: List<Pair<String, Double>>): Long = db.withTransaction {
+        val now = System.currentTimeMillis()
+        val parent = account.copy(kind = ItemKind.ACCOUNT, parentId = null, createdAt = now, updatedAt = now)
+        val parentId = itemDao.insert(parent)
+        val unitCost = if (profiles.isEmpty()) 0.0 else account.costPrice / profiles.size
+        profiles.forEachIndexed { i, (label, price) ->
+            itemDao.insert(
+                Item(
+                    kind = ItemKind.PROFILE,
+                    parentId = parentId,
+                    profilePin = label.ifBlank { "Perfil ${i + 1}" },
+                    suggestedPrice = price,
+                    costPrice = unitCost,
+                    createdAt = now + i + 1,
+                    updatedAt = now + i + 1,
+                ).withAccountData(parent),
+            )
+        }
+        parentId
+    }
+
+    suspend fun addProfile(account: Item, label: String, price: Double) {
+        val count = itemDao.profilesOf(account.id).size
+        val now = System.currentTimeMillis()
+        itemDao.insert(
+            Item(
+                kind = ItemKind.PROFILE,
+                parentId = account.id,
+                profilePin = label.ifBlank { "Perfil ${count + 1}" },
+                suggestedPrice = price,
+                createdAt = now,
+                updatedAt = now,
+            ).withAccountData(account),
+        )
     }
 
     suspend fun duplicate(item: Item, copies: Int): Long {
@@ -54,9 +118,19 @@ class InventoryRepository(private val db: AppDatabase) {
         var firstId = 0L
         db.withTransaction {
             val now = System.currentTimeMillis()
+            val profiles = if (item.isAccount) itemDao.profilesOf(item.id) else emptyList()
             repeat(copies) { i ->
                 val id = itemDao.insert(base.copy(createdAt = now + i, updatedAt = now + i))
                 if (i == 0) firstId = id
+                profiles.forEachIndexed { j, p ->
+                    itemDao.insert(
+                        p.copy(
+                            id = 0, parentId = id, status = ItemStatus.AVAILABLE, clientId = null, saleDate = null,
+                            salePrice = 0.0, clientExpirationDate = null, paid = true, lastReminderAt = null,
+                            createdAt = now + i + j + 1, updatedAt = now + i + j + 1,
+                        ),
+                    )
+                }
             }
         }
         return firstId
@@ -77,6 +151,12 @@ class InventoryRepository(private val db: AppDatabase) {
         paid: Boolean,
     ): Pair<Item, Client>? = db.withTransaction {
         val item = itemDao.get(itemId) ?: return@withTransaction null
+        // Cuenta completa: no se puede vender si ya hay perfiles vendidos.
+        if (item.isAccount && item.status != ItemStatus.SOLD &&
+            itemDao.profilesOf(item.id).any { it.status == ItemStatus.SOLD }
+        ) return@withTransaction null
+        // Perfil: no se puede vender si la cuenta completa ya está vendida.
+        if (item.isProfile && item.parentId?.let { itemDao.get(it) }?.status == ItemStatus.SOLD) return@withTransaction null
         val client = if (clientId != null) {
             clientDao.get(clientId)
         } else {
@@ -130,6 +210,7 @@ class InventoryRepository(private val db: AppDatabase) {
             updatedAt = System.currentTimeMillis(),
         )
         itemDao.update(updated)
+        if (item.isAccount) syncProfiles(updated)
         if (amount > 0 || cost > 0) {
             val client = item.clientId?.let { clientDao.get(it) }
             saleDao.insert(
@@ -183,9 +264,13 @@ class InventoryRepository(private val db: AppDatabase) {
     suspend fun setPaid(item: Item, paid: Boolean) =
         itemDao.update(item.copy(paid = paid, updatedAt = System.currentTimeMillis()))
 
+    /** Elimina el producto; si es una cuenta completa, también sus perfiles. */
     suspend fun deleteItem(item: Item) = db.withTransaction {
-        saleDao.detachItem(item.id)
-        itemDao.delete(item)
+        val toDelete = if (item.isAccount) itemDao.profilesOf(item.id) + item else listOf(item)
+        toDelete.forEach {
+            saleDao.detachItem(it.id)
+            itemDao.delete(it)
+        }
     }
 
     suspend fun saveClient(client: Client): Long =
@@ -210,4 +295,11 @@ class InventoryRepository(private val db: AppDatabase) {
     }
 }
 
-fun Item.displayName(): String = if (plan.isBlank()) name else "$name - $plan"
+fun Item.displayName(): String {
+    val base = if (plan.isBlank()) name else "$name - $plan"
+    return when {
+        isProfile && profilePin.isNotBlank() -> "$base ($profilePin)"
+        isAccount -> "$base (cuenta completa)"
+        else -> base
+    }
+}

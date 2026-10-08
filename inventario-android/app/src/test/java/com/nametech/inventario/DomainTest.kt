@@ -3,8 +3,10 @@ package com.nametech.inventario
 import com.nametech.inventario.data.AppSettings
 import com.nametech.inventario.data.Client
 import com.nametech.inventario.data.Item
+import com.nametech.inventario.data.ItemKind
 import com.nametech.inventario.data.ItemStatus
 import com.nametech.inventario.domain.Filter
+import com.nametech.inventario.domain.Stock
 import com.nametech.inventario.domain.TimeState
 import com.nametech.inventario.domain.matches
 import com.nametech.inventario.domain.timeState
@@ -71,5 +73,42 @@ class DomainTest {
             today,
         )
         assertEquals("Hola Ana\nUsuario: cuenta@correo.com\nClave: clave123\nTienda", text)
+    }
+}
+
+class StockTest {
+    private val today = 20_000L
+    private val account = Item(id = 1, name = "Netflix", kind = ItemKind.ACCOUNT, expirationDate = today + 30)
+    private fun profile(id: Long, status: String = ItemStatus.AVAILABLE) =
+        Item(id = id, name = "Netflix", kind = ItemKind.PROFILE, parentId = 1, status = status, expirationDate = today + 30, createdAt = id)
+
+    @Test
+    fun cuentaLibreSeVendeCompletaOPorPerfil() {
+        val stock = Stock(listOf(account, profile(2), profile(3)))
+        assertEquals(listOf(1L), stock.visible.map { it.id })
+        assertEquals(2, stock.freeProfiles(account).size)
+        assertTrue(stock.canSellFull(account))
+        assertTrue(stock.matches(account, Filter.AVAILABLE, today, 3))
+    }
+
+    @Test
+    fun perfilVendidoBloqueaVentaCompletaYApareceEnLista() {
+        val sold = profile(3, ItemStatus.SOLD)
+        val stock = Stock(listOf(account, profile(2), sold))
+        assertFalse(stock.canSellFull(account))
+        assertEquals(listOf(2L), stock.freeProfiles(account).map { it.id })
+        assertEquals(setOf(1L, 3L), stock.visible.map { it.id }.toSet())
+    }
+
+    @Test
+    fun cuentaCompletaVendidaNoTienePerfilesLibres() {
+        val stock = Stock(listOf(account.copy(status = ItemStatus.SOLD), profile(2), profile(3)))
+        assertTrue(stock.freeProfiles(stock.all.first()).isEmpty())
+    }
+
+    @Test
+    fun cuentaSinPerfilesLibresNoCuentaComoDisponible() {
+        val stock = Stock(listOf(account, profile(2, ItemStatus.SOLD)))
+        assertFalse(stock.matches(account, Filter.AVAILABLE, today, 3))
     }
 }

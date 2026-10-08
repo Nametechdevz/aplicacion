@@ -9,6 +9,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -21,6 +23,9 @@ interface ItemDao {
 
     @Query("SELECT * FROM items WHERE id = :id")
     suspend fun get(id: Long): Item?
+
+    @Query("SELECT * FROM items WHERE parentId = :parentId ORDER BY createdAt")
+    suspend fun profilesOf(parentId: Long): List<Item>
 
     @Insert
     suspend fun insert(item: Item): Long
@@ -92,7 +97,7 @@ interface SaleDao {
     suspend fun clear()
 }
 
-@Database(entities = [Item::class, Client::class, Sale::class], version = 1, exportSchema = true)
+@Database(entities = [Item::class, Client::class, Sale::class], version = 2, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun items(): ItemDao
     abstract fun clients(): ClientDao
@@ -100,6 +105,17 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         fun build(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "inventario.db").build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "inventario.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
+
+        /** v2: cuentas completas con perfiles. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN kind TEXT NOT NULL DEFAULT 'SINGLE'")
+                db.execSQL("ALTER TABLE items ADD COLUMN parentId INTEGER DEFAULT NULL")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_items_parentId ON items(parentId)")
+            }
+        }
     }
 }

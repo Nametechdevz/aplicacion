@@ -11,7 +11,11 @@ digital. Funciona sin internet: los datos viven en el teléfono (SQLite/Room).
   (con sugerencias rápidas: Netflix, Disney+, Max, Spotify, Canva Pro, Office 365…).
 - Datos de cada producto: usuario/correo, contraseña (oculta), perfil/PIN, link de acceso,
   información adicional, proveedor, costo, precio de venta, **fecha de compra** y **fecha de vencimiento**.
-- Crear varias unidades a la vez (p. ej. los 5 perfiles de una cuenta, numerados solos) y duplicar.
+- **Cuentas con perfiles**: guarde una cuenta completa (ej. Netflix 5 perfiles) con el nombre/PIN
+  de cada perfil, precio de la cuenta completa y precio por perfil. Al vender elija **cuenta
+  completa** o **un perfil**; la cuenta muestra "3/5 perfiles libres". Si cambia la clave o el
+  vencimiento de la cuenta, se actualiza en todos sus perfiles.
+- Crear varias unidades iguales a la vez (códigos, licencias) y duplicar.
 - Filtros: **Todas, Disponibles, Vendidas, Por vencer, Vencidas, Por cobrar, Inactivas**, por
   categoría, búsqueda y orden (vencimiento, recientes, nombre, precio).
 - Copiar datos, compartir, abrir el link, dar de baja, reactivar, eliminar.

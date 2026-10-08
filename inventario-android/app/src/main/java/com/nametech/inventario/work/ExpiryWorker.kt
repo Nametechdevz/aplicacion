@@ -23,6 +23,7 @@ import com.nametech.inventario.MainActivity
 import com.nametech.inventario.R
 import com.nametech.inventario.data.AppSettings
 import com.nametech.inventario.data.ItemStatus
+import com.nametech.inventario.data.isProfile
 import com.nametech.inventario.data.displayName
 import com.nametech.inventario.domain.TimeState
 import com.nametech.inventario.domain.accountTimeState
@@ -49,7 +50,7 @@ class ExpiryWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val sold = active.filter { it.status == ItemStatus.SOLD }
         val dueSoon = sold.filter { it.timeState(t, s.dueSoonDays) == TimeState.DUE_SOON }
         val expired = sold.filter { it.timeState(t, s.dueSoonDays) == TimeState.EXPIRED }
-        val accounts = active.filter {
+        val accounts = active.filter { !it.isProfile }.filter {
             val st = it.accountTimeState(t, s.dueSoonDays)
             st == TimeState.DUE_SOON || st == TimeState.EXPIRED
         }

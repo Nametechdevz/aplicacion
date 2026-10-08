@@ -1,6 +1,7 @@
 package com.nametech.inventario.ui.screens
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ContentCopy
@@ -63,6 +65,10 @@ import com.nametech.inventario.data.Client
 import com.nametech.inventario.data.Item
 import com.nametech.inventario.data.ItemStatus
 import com.nametech.inventario.data.SaleKind
+import com.nametech.inventario.data.isAccount
+import com.nametech.inventario.data.isProfile
+import com.nametech.inventario.data.displayName
+import com.nametech.inventario.domain.Stock
 import com.nametech.inventario.domain.Category
 import com.nametech.inventario.domain.TimeState
 import com.nametech.inventario.domain.accountTimeState
@@ -129,12 +135,17 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
     val client = product.clientId?.let { cid -> clients?.firstOrNull { it.id == cid } }
     val category = Category.of(product.category)
     val history = sales.filter { it.itemId == product.id }
+    val stock = Stock(items.orEmpty())
+    val profiles = if (product.isAccount) stock.profilesOf(product) else emptyList()
+    val parent = stock.parentOf(product)
+    val clientNames = clients.orEmpty().associate { it.id to it.name }
 
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmRelease by remember { mutableStateOf(false) }
     var showRenew by remember { mutableStateOf(false) }
     var showDuplicate by remember { mutableStateOf(false) }
+    var showAddProfile by remember { mutableStateOf(false) }
 
     ScreenScaffold(
         title = product.name,
@@ -205,11 +216,18 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         when (product.status) {
                             ItemStatus.AVAILABLE -> {
-                                Button(onClick = { nav.sell(product.id) }) {
-                                    Icon(Icons.Filled.Sell, null); SpacerW(6); Text("Vender")
+                                val sellable = profiles.isEmpty() || stock.freeProfiles(product).isNotEmpty()
+                                val parentSold = parent?.status == ItemStatus.SOLD
+                                if (sellable && !parentSold) {
+                                    Button(onClick = { nav.sell(product.id) }) {
+                                        Icon(Icons.Filled.Sell, null); SpacerW(6)
+                                        Text(if (profiles.isNotEmpty()) "Vender (completa o perfil)" else "Vender")
+                                    }
                                 }
-                                OutlinedButton(onClick = { showRenew = true }) {
-                                    Icon(Icons.Filled.Autorenew, null); SpacerW(6); Text("Renovar cuenta")
+                                if (!product.isProfile) {
+                                    OutlinedButton(onClick = { showRenew = true }) {
+                                        Icon(Icons.Filled.Autorenew, null); SpacerW(6); Text("Renovar cuenta")
+                                    }
                                 }
                             }
                             ItemStatus.SOLD -> {
@@ -262,6 +280,53 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
                     InfoRow("Información adicional", product.extraInfo, copyable = true)
                     if (listOf(product.accessUser, product.accessPassword, product.profilePin, product.accessUrl, product.extraInfo).all { it.isBlank() }) {
                         Text("Sin datos de acceso registrados", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            if (parent != null) {
+                item {
+                    SectionCard("Cuenta completa") {
+                        InfoRow("Este perfil pertenece a", parent.displayName(), onClick = { nav.item(parent.id) })
+                        if (parent.status == ItemStatus.SOLD) {
+                            Text("La cuenta completa está vendida, este perfil no se puede vender aparte.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
+            if (product.isAccount) {
+                item {
+                    SectionCard(
+                        "Perfiles (${stock.freeProfiles(product).size}/${profiles.size} libres)",
+                        action = {
+                            TextButton(onClick = { showAddProfile = true }) {
+                                Icon(Icons.Filled.Add, null); SpacerW(4); Text("Agregar")
+                            }
+                        },
+                    ) {
+                        if (product.status == ItemStatus.SOLD) {
+                            Text(
+                                "Cuenta completa vendida: los perfiles van incluidos.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
+                        if (profiles.isEmpty()) Text("Sin perfiles", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        profiles.forEachIndexed { i, p ->
+                            if (i > 0) HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                            ProfileRow(
+                                profile = p,
+                                clientName = p.clientId?.let { clientNames[it] },
+                                accountSold = product.status == ItemStatus.SOLD,
+                                accountInactive = product.status == ItemStatus.INACTIVE,
+                                today = today,
+                                dueSoonDays = s.dueSoonDays,
+                                settings = s,
+                                onOpen = { nav.item(p.id) },
+                                onSell = { nav.sell(p.id) },
+                            )
+                        }
                     }
                 }
             }
@@ -338,7 +403,11 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
     if (confirmDelete) {
         ConfirmDialog(
             "Eliminar producto",
-            "Se eliminará «${product.name}». El historial de ventas se conserva. ¿Continuar?",
+            if (product.isAccount && profiles.isNotEmpty()) {
+                "Se eliminará la cuenta «${product.name}» y sus ${profiles.size} perfiles (también los vendidos). El historial de ventas se conserva. ¿Continuar?"
+            } else {
+                "Se eliminará «${product.name}». El historial de ventas se conserva. ¿Continuar?"
+            },
             confirm = "Eliminar",
             onConfirm = { vm.launch { vm.repo.deleteItem(product) } },
             onDismiss = { confirmDelete = false },
@@ -357,6 +426,17 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
         RenewDialog(product, s, today, onDismiss = { showRenew = false }) { clientExp, accountExp, amount, cost ->
             vm.launch { vm.repo.renew(product, clientExp, accountExp, amount, cost, today) }
             showRenew = false
+        }
+    }
+    if (showAddProfile) {
+        AddProfileDialog(
+            suggestedLabel = "Perfil ${profiles.size + 1}",
+            defaultPrice = profiles.lastOrNull()?.suggestedPrice ?: 0.0,
+            currency = s.currencySymbol,
+            onDismiss = { showAddProfile = false },
+        ) { label, price ->
+            vm.launch { vm.repo.addProfile(product, label, price) }
+            showAddProfile = false
         }
     }
     if (showDuplicate) {
@@ -434,6 +514,89 @@ private fun RenewDialog(
         confirmButton = {
             TextButton(onClick = { onConfirm(clientExp, accountExp, Fmt.parseMoney(amount), Fmt.parseMoney(cost)) }) { Text("Renovar") }
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+@Composable
+private fun ProfileRow(
+    profile: Item,
+    clientName: String?,
+    accountSold: Boolean,
+    accountInactive: Boolean,
+    today: Long,
+    dueSoonDays: Int,
+    settings: AppSettings,
+    onOpen: () -> Unit,
+    onSell: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(profile.profilePin.ifBlank { "Perfil" }, fontWeight = FontWeight.SemiBold)
+            when {
+                profile.status == ItemStatus.SOLD -> {
+                    Text(
+                        "Vendido a ${clientName ?: "cliente"} · ${daysText(profile.daysLeft(today))}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = timeColor(profile.timeState(today, dueSoonDays)),
+                    )
+                    if (!profile.paid) Text("Por cobrar", style = MaterialTheme.typography.labelSmall, color = Red)
+                }
+                accountSold -> Text("Incluido en la venta de la cuenta", style = MaterialTheme.typography.bodySmall)
+                profile.status == ItemStatus.INACTIVE || accountInactive ->
+                    Text("Inactivo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else -> Text(
+                    "Libre" + if (profile.suggestedPrice > 0) " · ${Fmt.money(profile.suggestedPrice, settings)}" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Green,
+                )
+            }
+        }
+        if (profile.status == ItemStatus.AVAILABLE && !accountSold && !accountInactive) {
+            FilledTonalButton(onClick = onSell) { Text("Vender") }
+        }
+    }
+}
+
+@Composable
+private fun AddProfileDialog(
+    suggestedLabel: String,
+    defaultPrice: Double,
+    currency: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double) -> Unit,
+) {
+    var label by remember { mutableStateOf(suggestedLabel) }
+    var price by remember { mutableStateOf(Fmt.plain(defaultPrice)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Agregar perfil") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text("Nombre / PIN del perfil") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Precio ($currency)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(label.trim(), Fmt.parseMoney(price)) }) { Text("Agregar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }

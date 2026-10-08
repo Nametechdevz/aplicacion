@@ -46,7 +46,7 @@ import com.nametech.inventario.domain.Category
 import com.nametech.inventario.domain.Filter
 import com.nametech.inventario.domain.TimeState
 import com.nametech.inventario.domain.effectiveExpiration
-import com.nametech.inventario.domain.matches
+import com.nametech.inventario.domain.Stock
 import com.nametech.inventario.domain.timeState
 import com.nametech.inventario.ui.AppViewModel
 import com.nametech.inventario.ui.Nav
@@ -81,13 +81,15 @@ fun DashboardScreen(vm: AppViewModel, nav: Nav) {
             )
         },
     ) { padding ->
-        val all = items
-        if (all == null) {
+        val loaded = items
+        if (loaded == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@ScreenScaffold
         }
+        val stock = Stock(loaded)
+        val all = stock.visible
         val clientNames = clients.orEmpty().associate { it.id to it.name }
-        fun count(f: Filter) = all.count { it.matches(f, today, s.dueSoonDays) }
+        fun count(f: Filter) = stock.count(f, today, s.dueSoonDays)
 
         val firstOfMonth = LocalDate.ofEpochDay(today).withDayOfMonth(1).toEpochDay()
         val monthSales = sales.filter { it.date in firstOfMonth..today }
@@ -96,7 +98,15 @@ fun DashboardScreen(vm: AppViewModel, nav: Nav) {
         val totalIncome = sales.sumOf { it.amount }
         val totalProfit = sales.sumOf { it.amount - it.cost }
         val unpaid = all.filter { it.status == ItemStatus.SOLD && !it.paid }
-        val stockValue = all.filter { it.matches(Filter.AVAILABLE, today, s.dueSoonDays) }.sumOf { it.suggestedPrice }
+        val stockValue = all.filter { stock.matches(it, Filter.AVAILABLE, today, s.dueSoonDays) }.sumOf { item ->
+            if (stock.hasProfiles(item)) {
+                // Cuenta libre completa: vale lo que el mayor entre venderla entera o por perfiles.
+                val free = stock.freeProfiles(item)
+                if (stock.canSellFull(item)) maxOf(item.suggestedPrice, free.sumOf { it.suggestedPrice }) else free.sumOf { it.suggestedPrice }
+            } else {
+                item.suggestedPrice
+            }
+        }
         val upcoming = all
             .filter { it.status != ItemStatus.INACTIVE && it.effectiveExpiration() != null }
             .filter { it.timeState(today, s.dueSoonDays).let { st -> st == TimeState.DUE_SOON || st == TimeState.EXPIRED } }
@@ -185,7 +195,7 @@ fun DashboardScreen(vm: AppViewModel, nav: Nav) {
                         val ofCat = active.filter { it.category == cat.name }
                         if (ofCat.isEmpty()) return@forEach
                         val sold = ofCat.count { it.status == ItemStatus.SOLD }
-                        val available = ofCat.count { it.matches(Filter.AVAILABLE, today, s.dueSoonDays) }
+                        val available = ofCat.count { stock.matches(it, Filter.AVAILABLE, today, s.dueSoonDays) }
                         Row(
                             Modifier
                                 .fillMaxWidth()

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -46,12 +47,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nametech.inventario.data.Item
 import com.nametech.inventario.data.ItemStatus
+import com.nametech.inventario.data.displayName
 import com.nametech.inventario.domain.Category
 import com.nametech.inventario.domain.Filter
 import com.nametech.inventario.domain.SortOrder
 import com.nametech.inventario.domain.daysLeft
 import com.nametech.inventario.domain.daysText
-import com.nametech.inventario.domain.matches
+import com.nametech.inventario.domain.Stock
 import com.nametech.inventario.domain.matchesQuery
 import com.nametech.inventario.domain.sortedWithOrder
 import com.nametech.inventario.domain.timeState
@@ -95,15 +97,17 @@ fun InventoryScreen(vm: AppViewModel, nav: Nav) {
             FloatingActionButton(onClick = { nav.editItem() }) { Icon(Icons.Filled.Add, contentDescription = "Agregar") }
         },
     ) { padding ->
-        val all = items
-        if (all == null) {
+        val loaded = items
+        if (loaded == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@ScreenScaffold
         }
+        val stock = Stock(loaded)
+        val all = stock.visible
         val clientNames = clients.orEmpty().associate { it.id to it.name }
         val byCategory = all.filter { vm.inventoryCategory == null || it.category == vm.inventoryCategory }
         val visible = byCategory
-            .filter { it.matches(vm.inventoryFilter, today, s.dueSoonDays) }
+            .filter { stock.matches(it, vm.inventoryFilter, today, s.dueSoonDays) }
             .filter { it.matchesQuery(query, clientNames[it.clientId]) }
             .sortedWithOrder(sort)
 
@@ -124,7 +128,7 @@ fun InventoryScreen(vm: AppViewModel, nav: Nav) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(Filter.entries) { f ->
-                    val n = byCategory.count { it.matches(f, today, s.dueSoonDays) }
+                    val n = stock.count(f, today, s.dueSoonDays, byCategory)
                     FilterChip(
                         selected = vm.inventoryFilter == f,
                         onClick = { vm.inventoryFilter = f },
@@ -166,7 +170,7 @@ fun InventoryScreen(vm: AppViewModel, nav: Nav) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(visible, key = { it.id }) { item ->
-                        ItemCard(item, clientNames[item.clientId], today, s.dueSoonDays) { nav.item(item.id) }
+                        ItemCard(item, clientNames[item.clientId], today, s.dueSoonDays, profilesSummary(stock, item)) { nav.item(item.id) }
                     }
                 }
             }
@@ -175,7 +179,14 @@ fun InventoryScreen(vm: AppViewModel, nav: Nav) {
 }
 
 @Composable
-fun ItemCard(item: Item, clientName: String?, today: Long, dueSoonDays: Int, onClick: () -> Unit) {
+fun ItemCard(
+    item: Item,
+    clientName: String?,
+    today: Long,
+    dueSoonDays: Int,
+    profilesInfo: String? = null,
+    onClick: () -> Unit,
+) {
     val category = Category.of(item.category)
     Card(
         onClick = onClick,
@@ -203,6 +214,12 @@ fun ItemCard(item: Item, clientName: String?, today: Long, dueSoonDays: Int, onC
                         Text(clientName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
                     }
                 }
+                if (profilesInfo != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Groups, contentDescription = null, modifier = Modifier.padding(end = 4.dp).size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                        Text(profilesInfo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+                    }
+                }
                 Row(Modifier.padding(top = 4.dp)) { StatusBadges(item, today, dueSoonDays) }
             }
             if (item.status != ItemStatus.INACTIVE) {
@@ -223,6 +240,16 @@ fun ItemCard(item: Item, clientName: String?, today: Long, dueSoonDays: Int, onC
     }
 }
 
+/** "Cuenta completa · 3/5 perfiles libres" para las cuentas con perfiles. */
+fun profilesSummary(stock: Stock, item: Item): String? {
+    if (!stock.hasProfiles(item)) return null
+    val total = stock.profilesOf(item).size
+    return when {
+        item.status == ItemStatus.SOLD -> "Cuenta completa vendida · $total perfiles"
+        else -> "Cuenta completa · ${stock.freeProfiles(item).size}/$total perfiles libres"
+    }
+}
+
 /** Fila compacta para listas dentro de tarjetas (panel, detalle de cliente). */
 @Composable
 fun ItemRowCompact(item: Item, clientName: String?, today: Long, dueSoonDays: Int, onClick: () -> Unit) {
@@ -236,7 +263,7 @@ fun ItemRowCompact(item: Item, clientName: String?, today: Long, dueSoonDays: In
         CategoryAvatar(Category.of(item.category), 36)
         SpacerW(12)
         Column(Modifier.weight(1f)) {
-            Text(item.name + if (item.plan.isNotBlank()) " · ${item.plan}" else "", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.displayName(), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 clientName ?: item.accessUser.ifBlank { "Sin cliente" },
                 style = MaterialTheme.typography.bodySmall,

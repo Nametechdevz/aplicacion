@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nametech.inventario.data.Item
 import com.nametech.inventario.data.ItemStatus
+import com.nametech.inventario.data.displayName
+import com.nametech.inventario.data.isProfile
 import com.nametech.inventario.domain.Category
 import com.nametech.inventario.domain.TimeState
 import com.nametech.inventario.domain.accountTimeState
@@ -85,7 +87,7 @@ fun RemindersScreen(vm: AppViewModel, nav: Nav) {
                 .sortedByDescending { it.effectiveExpiration() },
             ReminderTab.UNPAID to sold.filter { !it.paid }.sortedBy { it.saleDate },
             ReminderTab.SUPPLIER to all.filter {
-                it.status != ItemStatus.INACTIVE &&
+                it.status != ItemStatus.INACTIVE && !it.isProfile &&
                     it.accountTimeState(today, s.dueSoonDays).let { st -> st == TimeState.DUE_SOON || st == TimeState.EXPIRED }
             }.sortedBy { it.expirationDate },
         )
@@ -170,7 +172,7 @@ private fun ReminderCard(
                 Column(Modifier.weight(1f)) {
                     Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        item.name + if (item.plan.isNotBlank()) " · ${item.plan}" else "",
+                        item.displayName(),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

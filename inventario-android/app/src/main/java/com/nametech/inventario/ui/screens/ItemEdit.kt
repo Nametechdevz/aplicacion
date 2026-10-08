@@ -31,6 +31,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nametech.inventario.data.Item
+import com.nametech.inventario.data.ItemKind
 import com.nametech.inventario.domain.Category
 import com.nametech.inventario.domain.today
 import com.nametech.inventario.ui.AppViewModel
@@ -86,6 +90,11 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
     var copies by rememberSaveable { mutableStateOf("1") }
     var nameError by rememberSaveable { mutableStateOf(false) }
     var categoryMenu by rememberSaveable { mutableStateOf(false) }
+    // Cuenta completa con perfiles (solo al crear).
+    var withProfiles by rememberSaveable { mutableStateOf(false) }
+    var profilePrice by rememberSaveable { mutableStateOf("") }
+    var profileNames by rememberSaveable { mutableStateOf(List(5) { "Perfil ${it + 1}" }) }
+    var kind by rememberSaveable { mutableStateOf(ItemKind.SINGLE) }
 
     LaunchedEffect(id) {
         if (!isNew && original == null) {
@@ -94,7 +103,7 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
             category = it.category; name = it.name; plan = it.plan; user = it.accessUser
             password = it.accessPassword; profile = it.profilePin; url = it.accessUrl; extra = it.extraInfo
             supplier = it.supplier; cost = Fmt.plain(it.costPrice); price = Fmt.plain(it.suggestedPrice)
-            purchase = it.purchaseDate; expiration = it.expirationDate; notes = it.notes
+            purchase = it.purchaseDate; expiration = it.expirationDate; notes = it.notes; kind = it.kind
             loaded = true
         }
     }
@@ -123,7 +132,12 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
                 expirationDate = expiration,
                 notes = notes.trim(),
             )
-            vm.repo.saveItem(item, copies = if (isNew) (copies.toIntOrNull() ?: 1).coerceIn(1, 50) else 1)
+            if (isNew && withProfiles) {
+                val each = Fmt.parseMoney(profilePrice)
+                vm.repo.createAccount(item.copy(profilePin = ""), profileNames.map { it.trim() to each })
+            } else {
+                vm.repo.saveItem(item, copies = if (isNew) (copies.toIntOrNull() ?: 1).coerceIn(1, 50) else 1)
+            }
             nav.back()
         }
     }
@@ -178,10 +192,47 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
             }
             SimpleField("Plan / tipo (ej. Premium 4K, Perfil, Mensual)", plan, { plan = it })
 
+            if (isNew) {
+                SectionTitle("¿Cómo la vas a vender?")
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = !withProfiles,
+                        onClick = { withProfiles = false },
+                        shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    ) { Text("Producto individual") }
+                    SegmentedButton(
+                        selected = withProfiles,
+                        onClick = { withProfiles = true },
+                        shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    ) { Text("Cuenta con perfiles") }
+                }
+                if (withProfiles) {
+                    Text(
+                        "Se guarda la cuenta completa y sus perfiles. Al vender eliges si vendes la cuenta completa o un solo perfil.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (kind == ItemKind.ACCOUNT) {
+                Text(
+                    "Cuenta con perfiles: los cambios de correo, clave, link, proveedor y fechas se aplican también a todos sus perfiles.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            } else if (kind == ItemKind.PROFILE) {
+                Text(
+                    "Este es un perfil de una cuenta completa. El correo, la clave y las fechas se actualizan al editar la cuenta.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            }
+
             SectionTitle("Datos de acceso")
             SimpleField("Usuario / correo", user, { user = it }, keyboardType = KeyboardType.Email, leading = Icons.Filled.Email)
             SimpleField("Contraseña", password, { password = it }, password = true, leading = Icons.Filled.Key)
-            SimpleField("Perfil / PIN", profile, { profile = it }, leading = Icons.Filled.Person)
+            if (!(isNew && withProfiles) && kind != ItemKind.ACCOUNT) {
+                SimpleField("Perfil / PIN", profile, { profile = it }, leading = Icons.Filled.Person)
+            }
             SimpleField("Link de acceso (plataforma, curso, sistema)", url, { url = it }, keyboardType = KeyboardType.Uri, leading = Icons.Filled.Link)
             SimpleField("Información adicional (licencia, servidor, etc.)", extra, { extra = it }, singleLine = false, minLines = 2)
 
@@ -189,7 +240,20 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
             SimpleField("Proveedor", supplier, { supplier = it }, leading = Icons.Filled.Store)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SimpleField("Costo (${s.currencySymbol})", cost, { cost = it }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
-                SimpleField("Precio venta (${s.currencySymbol})", price, { price = it }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                SimpleField(
+                    if ((isNew && withProfiles) || kind == ItemKind.ACCOUNT) "Precio cuenta completa" else "Precio venta (${s.currencySymbol})",
+                    price,
+                    { price = it },
+                    Modifier.weight(1f),
+                    keyboardType = KeyboardType.Decimal,
+                )
+            }
+            if (isNew && withProfiles) {
+                Text(
+                    "El costo es el de la cuenta completa; se reparte entre los perfiles para calcular la ganancia.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             DateField("Fecha de compra", purchase, { purchase = it })
             DateField("Fecha de vencimiento de la cuenta", expiration, { expiration = it })
@@ -205,14 +269,51 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
 
             SimpleField("Notas", notes, { notes = it }, singleLine = false, minLines = 2)
 
-            if (isNew) {
+            if (isNew && withProfiles) {
+                SectionTitle("Perfiles")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SimpleField(
+                        "Cantidad de perfiles",
+                        profileNames.size.toString(),
+                        { v ->
+                            val n = (v.filter { it.isDigit() }.take(2).toIntOrNull() ?: 0).coerceIn(1, 20)
+                            profileNames = List(n) { i -> profileNames.getOrNull(i) ?: "Perfil ${i + 1}" }
+                        },
+                        Modifier.weight(1f),
+                        keyboardType = KeyboardType.Number,
+                    )
+                    SimpleField(
+                        "Precio por perfil (${s.currencySymbol})",
+                        profilePrice,
+                        { profilePrice = it },
+                        Modifier.weight(1f),
+                        keyboardType = KeyboardType.Decimal,
+                    )
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(2, 3, 4, 5, 6).forEach { n ->
+                        AssistChip(
+                            onClick = { profileNames = List(n) { i -> profileNames.getOrNull(i) ?: "Perfil ${i + 1}" } },
+                            label = { Text("$n perfiles") },
+                        )
+                    }
+                }
+                profileNames.forEachIndexed { i, label ->
+                    SimpleField(
+                        "Perfil ${i + 1}: nombre / PIN",
+                        label,
+                        { v -> profileNames = profileNames.toMutableList().also { it[i] = v } },
+                        leading = Icons.Filled.Person,
+                    )
+                }
+            } else if (isNew) {
                 SectionTitle("Cantidad")
                 SimpleField(
                     "Unidades a crear",
                     copies,
                     { v -> copies = v.filter { it.isDigit() }.take(2) },
                     keyboardType = KeyboardType.Number,
-                    supporting = "Ej. 5 para los 5 perfiles de una cuenta. Si no indicas perfil, se numeran «Perfil 1…5».",
+                    supporting = "Para crear varias unidades iguales (ej. códigos o licencias). Para perfiles usa «Cuenta con perfiles».",
                 )
             }
             SpacerH(4)

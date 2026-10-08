@@ -10,6 +10,13 @@ object ItemStatus {
     const val INACTIVE = "INACTIVE"
 }
 
+/** Tipo de producto: individual, cuenta completa con perfiles, o perfil de una cuenta. */
+object ItemKind {
+    const val SINGLE = "SINGLE"
+    const val ACCOUNT = "ACCOUNT"
+    const val PROFILE = "PROFILE"
+}
+
 object SaleKind {
     const val SALE = "VENTA"
     const val RENEWAL = "RENOVACION"
@@ -19,7 +26,7 @@ object SaleKind {
  * Un producto del inventario: una cuenta/perfil de streaming, un curso, un sistema web, etc.
  * Las fechas se guardan como días desde época (LocalDate.toEpochDay()).
  */
-@Entity(tableName = "items", indices = [Index("clientId"), Index("status")])
+@Entity(tableName = "items", indices = [Index("clientId"), Index("status"), Index("parentId")])
 data class Item(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val category: String = "STREAMING",
@@ -49,7 +56,14 @@ data class Item(
     val notes: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
+    /** [ItemKind]: individual, cuenta con perfiles o perfil. */
+    val kind: String = ItemKind.SINGLE,
+    /** Para un perfil: id de la cuenta completa a la que pertenece. */
+    val parentId: Long? = null,
 )
+
+val Item.isAccount: Boolean get() = kind == ItemKind.ACCOUNT
+val Item.isProfile: Boolean get() = kind == ItemKind.PROFILE
 
 @Entity(tableName = "clients")
 data class Client(
