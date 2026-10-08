@@ -1,21 +1,33 @@
 import type { LatLng, Tariff } from './types';
 
+/** Tarifa por defecto en pesos colombianos (la central la ajusta en Tarifas). */
 export const DEFAULT_TARIFF: Tariff = {
-  currency: 'USD',
-  baseFare: 1.5,
-  perKm: 0.9,
-  perMinute: 0.2,
-  minimumFare: 4,
+  currency: 'COP',
+  baseFare: 5000,
+  perKm: 1200,
+  perMinute: 250,
+  minimumFare: 8000,
   surge: 1,
+  roundTo: 100,
 };
 
-/** Tarifa = max(mínima, base + km·precio_km + min·precio_min) × multiplicador, redondeada a céntimos. */
+/** Monedas que no usan decimales en la práctica: el precio se redondea a 100 unidades. */
+const NO_DECIMALS = new Set(['COP', 'CLP', 'PYG', 'JPY', 'KRW', 'VND', 'IDR', 'HUF', 'ISK']);
+
+export function defaultRoundTo(currency: string): number {
+  return NO_DECIMALS.has(currency.toUpperCase()) ? 100 : 0.01;
+}
+
+/** Tarifa = max(mínima, base + km·precio_km + min·precio_min) × multiplicador, redondeada a `roundTo`. */
 export function calculateFare(distanceM: number, durationS: number, tariff: Tariff): number {
   const km = Math.max(0, distanceM) / 1000;
   const minutes = Math.max(0, durationS) / 60;
   const raw = tariff.baseFare + km * tariff.perKm + minutes * tariff.perMinute;
   const fare = Math.max(tariff.minimumFare, raw) * Math.max(1, tariff.surge);
-  return Math.round(fare * 100) / 100;
+  const step = tariff.roundTo > 0 ? tariff.roundTo : defaultRoundTo(tariff.currency);
+  // Se trabaja en céntimos para evitar errores de coma flotante (p. ej. 0.1 + 0.2).
+  const cents = Math.round(step * 100);
+  return (Math.round((fare * 100) / cents) * cents) / 100;
 }
 
 const EARTH_RADIUS_M = 6_371_000;
@@ -35,11 +47,33 @@ export function approximateRoute(from: LatLng, to: LatLng) {
   return { distanceM, durationS };
 }
 
-export function formatMoney(amount: number, currency: string, locale = 'es'): string {
+export function formatMoney(amount: number, currency: string, locale?: string): string {
+  const cur = currency.toUpperCase();
+  const whole = NO_DECIMALS.has(cur) || Number.isInteger(amount);
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+    return new Intl.NumberFormat(locale ?? (cur === 'COP' ? 'es-CO' : 'es'), {
+      style: 'currency',
+      currency: cur,
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: whole ? 0 : 2,
+    }).format(amount);
   } catch {
-    return `${amount.toFixed(2)} ${currency}`;
+    return `${whole ? Math.round(amount) : amount.toFixed(2)} ${cur}`;
+  }
+}
+
+/** Formato compacto para ejes de gráficas: $ 1,2 M, $ 350 mil… */
+export function formatMoneyShort(amount: number, currency: string): string {
+  const cur = currency.toUpperCase();
+  try {
+    return new Intl.NumberFormat(cur === 'COP' ? 'es-CO' : 'es', {
+      style: 'currency',
+      currency: cur,
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(amount);
+  } catch {
+    return formatMoney(amount, cur);
   }
 }
 

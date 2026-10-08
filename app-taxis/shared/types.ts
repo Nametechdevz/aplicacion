@@ -47,6 +47,24 @@ export interface Tariff {
   perMinute: number;
   minimumFare: number;
   surge: number;
+  /** El precio se redondea a múltiplos de este valor (100 = cientos de pesos, 0.01 = céntimos). */
+  roundTo: number;
+}
+
+export interface DailyPoint {
+  date: string;
+  rides: number;
+  completed: number;
+  revenue: number;
+}
+
+export interface Analytics {
+  currency: string;
+  timeZone: string;
+  days: DailyPoint[];
+  statusCounts: Record<RideStatus, number>;
+  topDrivers: { id: number; name: string; plate: string | null; rides: number; revenue: number; rating: number | null }[];
+  totals: { rides: number; completed: number; revenue: number; avgFare: number };
 }
 
 export interface RouteInfo {

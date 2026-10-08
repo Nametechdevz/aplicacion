@@ -159,7 +159,7 @@ describe('API de la App de Taxis', () => {
   });
 
   it('cotiza un viaje con la tarifa configurada', async () => {
-    const t = await call('PUT', '/admin/tariff', admin, { currency: 'EUR', baseFare: 2, perKm: 1, perMinute: 0.25, minimumFare: 5, surge: 1 });
+    const t = await call('PUT', '/admin/tariff', admin, { currency: 'EUR', baseFare: 2, perKm: 1, perMinute: 0.25, minimumFare: 5, surge: 1, roundTo: 0.01 });
     expect(t.status).toBe(200);
     const q = await call('POST', '/rides/quote', passenger, { pickup: PICKUP, dropoff: DROPOFF });
     expect(q.status).toBe(200);
@@ -247,6 +247,15 @@ describe('API de la App de Taxis', () => {
     const hist = await call<Ride[]>('GET', '/rides', passenger);
     expect(hist.data[0].id).toBe(rideId);
 
+    const an = await call('GET', '/admin/analytics?days=7', admin);
+    expect(an.status).toBe(200);
+    expect(an.data.days).toHaveLength(7);
+    expect(an.data.days.at(-1).completed).toBe(1);
+    expect(an.data.days.at(-1).revenue).toBe(c.data.fareFinal);
+    expect(an.data.statusCounts.completed).toBe(1);
+    expect(an.data.topDrivers[0].name).toBe('Carlos Conductor');
+    expect((await call('GET', '/admin/analytics', passenger)).status).toBe(403);
+
     const stats = await call('GET', '/admin/stats', admin);
     expect(stats.data.completedToday).toBe(1);
     expect(stats.data.onlineDrivers).toBe(2);
@@ -297,8 +306,17 @@ describe('API de la App de Taxis', () => {
   it('expone la configuración del mapa sin sesión y deja que el mapa sepa el origen', async () => {
     const r = await fetch(`${base}/api/config`);
     expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ tileUrl: '', tileAttribution: '' });
+    expect(await r.json()).toEqual({ tileUrl: '', tileAttribution: '', timeZone: 'America/Bogota' });
     expect(r.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+  });
+
+  it('bloquea por IP tras muchos intentos fallidos, pero no por inicios de sesión correctos', async () => {
+    for (let i = 0; i < 35; i++) {
+      expect((await call('POST', '/auth/login', undefined, { email: 'admin@test.local', password: 'admin-pass-123' })).status).toBe(200);
+    }
+    let last = 0;
+    for (let i = 0; i < 31; i++) last = (await call('POST', '/auth/login', undefined, { email: 'admin@test.local', password: 'mala' })).status;
+    expect(last).toBe(429);
   });
 
   it('rechaza peticiones sin sesión', async () => {

@@ -11,17 +11,11 @@ import Admin from './pages/Admin';
 function Shell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user) return null;
-  const links =
-    user.role === 'admin'
-      ? [
-          ['/admin', '📊', 'Central'],
-          ['/perfil', '👤', 'Perfil'],
-        ]
-      : [
-          ['/', user.role === 'driver' ? '🚕' : '📍', user.role === 'driver' ? 'Conducir' : 'Pedir'],
-          ['/historial', user.role === 'driver' ? '💰' : '🧾', user.role === 'driver' ? 'Ganancias' : 'Viajes'],
-          ['/perfil', '👤', 'Perfil'],
-        ];
+  const links = [
+    ['/', user.role === 'driver' ? '🚕' : '📍', user.role === 'driver' ? 'Conducir' : 'Pedir'],
+    ['/historial', user.role === 'driver' ? '💰' : '🧾', user.role === 'driver' ? 'Ganancias' : 'Viajes'],
+    ['/perfil', '👤', 'Perfil'],
+  ];
   return (
     <div className={`shell role-${user.role}`}>
       <header className="topbar">
@@ -71,15 +65,23 @@ export default function App() {
     );
   }
 
-  const home = user.role === 'admin' ? <Navigate to="/admin" replace /> : user.role === 'driver' ? <DriverHome /> : <PassengerHome />;
+  if (user.role === 'admin') {
+    return (
+      <Routes>
+        <Route path="/admin/*" element={<Admin />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    );
+  }
+
+  const home = user.role === 'driver' ? <DriverHome /> : <PassengerHome />;
 
   return (
     <Shell>
       <Routes>
         <Route path="/" element={home} />
-        <Route path="/historial" element={user.role === 'admin' ? <Navigate to="/admin/viajes" replace /> : <History />} />
+        <Route path="/historial" element={<History />} />
         <Route path="/perfil" element={<Profile />} />
-        <Route path="/admin/*" element={user.role === 'admin' ? <Admin /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

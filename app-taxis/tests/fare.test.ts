@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_TARIFF, approximateRoute, calculateFare, haversineM } from '../shared/fare';
+import { DEFAULT_TARIFF, approximateRoute, calculateFare, formatMoney, haversineM } from '../shared/fare';
 import { nextStatus } from '../shared/rideState';
 
 describe('tarifa', () => {
-  const t = { currency: 'USD', baseFare: 2, perKm: 1, perMinute: 0.5, minimumFare: 5, surge: 1 };
+  const t = { currency: 'USD', baseFare: 2, perKm: 1, perMinute: 0.5, minimumFare: 5, surge: 1, roundTo: 0.01 };
 
   it('suma base + distancia + tiempo', () => {
     expect(calculateFare(10_000, 1200, t)).toBe(22); // 2 + 10 + 10
@@ -22,7 +22,22 @@ describe('tarifa', () => {
   });
 
   it('redondea a céntimos', () => {
-    expect(calculateFare(1234, 321, DEFAULT_TARIFF)).toBe(Math.round(Math.max(4, 1.5 + 1.234 * 0.9 + 5.35 * 0.2) * 100) / 100);
+    expect(calculateFare(1234, 321, t)).toBe(Math.round((2 + 1.234 + 5.35 * 0.5) * 100) / 100);
+  });
+
+  it('por defecto cobra en pesos colombianos redondeando a $100', () => {
+    expect(DEFAULT_TARIFF.currency).toBe('COP');
+    // 5.000 + 8 km × 1.200 + 20 min × 250 = 19.600
+    expect(calculateFare(8000, 1200, DEFAULT_TARIFF)).toBe(19600);
+    // 5.000 + 3,47 km × 1.200 + 9,5 min × 250 = 11.539 → 11.500
+    expect(calculateFare(3470, 570, DEFAULT_TARIFF)).toBe(11500);
+    // Trayecto muy corto: tarifa mínima
+    expect(calculateFare(300, 60, DEFAULT_TARIFF)).toBe(8000);
+  });
+
+  it('muestra los pesos sin decimales', () => {
+    expect(formatMoney(19600, 'COP').replace(/\s/g, ' ')).toBe('$ 19.600');
+    expect(formatMoney(4.5, 'USD')).toContain('4,50');
   });
 });
 

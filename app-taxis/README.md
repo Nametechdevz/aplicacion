@@ -6,7 +6,7 @@ Aplicación para pedir taxis: web móvil (PWA, instalable en Android e iPhone) y
 | --- | --- |
 | **Pasajero** | Marca recogida y destino (GPS, buscador de direcciones o tocando el mapa), ve la ruta y el **precio antes de pedir**, elige efectivo o tarjeta, sigue al conductor **en tiempo real**, lo llama, cancela, valora el viaje y consulta su historial. |
 | **Conductor** | Se registra con su vehículo, espera la aprobación de la central, se conecta/desconecta, recibe solicitudes cercanas con aviso por vibración, acepta, navega con Google Maps, marca *He llegado → Iniciar → Finalizar*, valora al pasajero y ve sus **ganancias** (hoy, semana, total). |
-| **Central (administración)** | Panel con estadísticas del día, **mapa en vivo** de la flota y viajes en curso, aprobación/bloqueo de conductores y pasajeros, listado de viajes con filtros, cancelación de viajes y **configuración de tarifas** con vista previa. |
+| **Central (administración)** | Panel con menú lateral: indicadores del día (facturado, viajes, conductores en línea…), **gráfica de facturación/viajes por día** (7, 14 o 30 días), tasa de viajes completados, **mapa en vivo** de la flota, ranking de conductores, aprobación/bloqueo de usuarios con filtros y buscador, historial de viajes y **tarifas en pesos colombianos (COP)** con vista previa. |
 
 <p>
 <img src="docs/capturas/05-pasajero-cotizacion.png" width="200" alt="Pasajero: cotización">
@@ -122,7 +122,7 @@ requested ──acepta conductor──▶ accepted ──llega──▶ arrived 
 ```
 
 - La solicitud se envía a los conductores **conectados, aprobados, libres y dentro de `DISPATCH_RADIUS_KM`**. El primero que acepta se lo queda (la base de datos impide que dos conductores acepten el mismo viaje) y a los demás se les retira la oferta.
-- **Tarifa** = máx(mínima, bajada de bandera + km × precio/km + min × precio/min) × multiplicador. El precio mostrado al pedir es el que se cobra, salvo que el viaje dure más de un 20 % de lo previsto (atascos), en cuyo caso se recalcula el tiempo.
+- **Tarifa** (por defecto en **COP**: banderazo $5.000, $1.200/km, $250/min, mínima $8.000, redondeo a $100) = máx(mínima, banderazo + km × valor km + min × valor min) × recargo. La central la cambia en *Tarifas*. El precio mostrado al pedir es el que se cobra, salvo que el viaje dure más de un 20 % de lo previsto (atascos), en cuyo caso se recalcula el tiempo.
 - El pago (efectivo o tarjeta) se hace **directamente al conductor**. La app no procesa pagos online; integrar una pasarela (Stripe, Mercado Pago…) sería el siguiente paso si lo necesitas.
 
 ## Pruebas

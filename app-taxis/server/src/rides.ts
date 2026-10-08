@@ -1,6 +1,8 @@
 import type { DriverLocation, LatLng, PaymentMethod, Place, Quote, Ride, RidePerson, RideStatus, Role, Tariff } from '../../shared/types';
 import { ACTIVE_RIDE_STATUSES } from '../../shared/types';
-import { DEFAULT_TARIFF, calculateFare, haversineM } from '../../shared/fare';
+import { DEFAULT_TARIFF, calculateFare, defaultRoundTo, haversineM } from '../../shared/fare';
+import type { Analytics } from '../../shared/types';
+import { zonedDateKey, zonedDayStart, zonedWeekStart } from './time';
 import { allowedFrom, nextStatus, type RideAction } from '../../shared/rideState';
 import type { Config } from './config';
 import { getSetting, nowIso, setSetting, type DB } from './db';
@@ -43,7 +45,11 @@ const ACTIVE_SQL = `('${ACTIVE_RIDE_STATUSES.join("','")}')`;
 
 export function createRideService(db: DB, config: Config, geo: Geo, rt: Realtime) {
   function tariff(): Tariff {
-    return { ...DEFAULT_TARIFF, ...getSetting<Partial<Tariff>>(db, 'tariff', {}) };
+    const saved = getSetting<Partial<Tariff>>(db, 'tariff', {});
+    const t = { ...DEFAULT_TARIFF, ...saved };
+    // Tarifas guardadas antes de existir el redondeo: se deduce de la moneda.
+    if (saved.currency && saved.roundTo === undefined) t.roundTo = defaultRoundTo(saved.currency);
+    return t;
   }
 
   function setTariff(t: Tariff): Tariff {
@@ -305,9 +311,8 @@ export function createRideService(db: DB, config: Config, geo: Geo, rt: Realtime
   }
 
   function earnings(driver: AuthUser) {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)).toISOString();
+    const startOfDay = zonedDayStart(config.timeZone).toISOString();
+    const startOfWeek = zonedWeekStart(config.timeZone).toISOString();
     const q = (since: string | null) =>
       db
         .prepare(
@@ -332,13 +337,20 @@ export function createRideService(db: DB, config: Config, geo: Geo, rt: Realtime
   }
 
   function stats() {
-    const startOfDay = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const startOfDay = zonedDayStart(config.timeZone).toISOString();
+    const startOfYesterday = zonedDayStart(config.timeZone, new Date(), -1).toISOString();
     const one = <T>(sql: string, ...p: (string | number)[]) => db.prepare(sql).get(...p) as T;
     return {
       currency: tariff().currency,
       ridesToday: one<{ n: number }>('SELECT COUNT(*) AS n FROM rides WHERE requested_at >= ?', startOfDay).n,
       completedToday: one<{ n: number }>(`SELECT COUNT(*) AS n FROM rides WHERE status = 'completed' AND completed_at >= ?`, startOfDay).n,
       revenueToday: one<{ s: number }>(`SELECT COALESCE(SUM(fare_final),0) AS s FROM rides WHERE status = 'completed' AND completed_at >= ?`, startOfDay).s,
+      revenueYesterday: one<{ s: number }>(
+        `SELECT COALESCE(SUM(fare_final),0) AS s FROM rides WHERE status = 'completed' AND completed_at >= ? AND completed_at < ?`,
+        startOfYesterday,
+        startOfDay,
+      ).s,
+      ridesYesterday: one<{ n: number }>('SELECT COUNT(*) AS n FROM rides WHERE requested_at >= ? AND requested_at < ?', startOfYesterday, startOfDay).n,
       activeRides: one<{ n: number }>(`SELECT COUNT(*) AS n FROM rides WHERE status IN ${ACTIVE_SQL}`).n,
       onlineDrivers: rt.drivers.online().length,
       pendingDrivers: one<{ n: number }>(`SELECT COUNT(*) AS n FROM users WHERE role = 'driver' AND status = 'pending'`).n,
@@ -347,7 +359,62 @@ export function createRideService(db: DB, config: Config, geo: Geo, rt: Realtime
     };
   }
 
+  /** Serie diaria, estados y mejores conductores de los últimos `days` días (zona horaria de la central). */
+  function analytics(days: number): Analytics {
+    const tz = config.timeZone;
+    const since = zonedDayStart(tz, new Date(), -(days - 1));
+    const rows = db
+      .prepare('SELECT status, driver_id, requested_at, completed_at, fare_final FROM rides WHERE requested_at >= ?')
+      .all(since.toISOString()) as { status: RideStatus; driver_id: number | null; requested_at: string; completed_at: string | null; fare_final: number | null }[];
+
+    const byDay = new Map<string, { rides: number; completed: number; revenue: number }>();
+    for (let i = 0; i < days; i++) byDay.set(zonedDateKey(tz, zonedDayStart(tz, since, i)), { rides: 0, completed: 0, revenue: 0 });
+    const statusCounts = Object.fromEntries(
+      (['requested', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled', 'expired'] as RideStatus[]).map((st) => [st, 0]),
+    ) as Record<RideStatus, number>;
+    const drivers = new Map<number, { rides: number; revenue: number }>();
+
+    for (const r of rows) {
+      statusCounts[r.status]++;
+      const day = byDay.get(zonedDateKey(tz, new Date(r.requested_at)));
+      if (day) day.rides++;
+      if (r.status === 'completed' && r.completed_at) {
+        const cd = byDay.get(zonedDateKey(tz, new Date(r.completed_at)));
+        if (cd) {
+          cd.completed++;
+          cd.revenue += r.fare_final ?? 0;
+        }
+        if (r.driver_id) {
+          const d = drivers.get(r.driver_id) ?? { rides: 0, revenue: 0 };
+          d.rides++;
+          d.revenue += r.fare_final ?? 0;
+          drivers.set(r.driver_id, d);
+        }
+      }
+    }
+
+    const topDrivers = [...drivers.entries()]
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .slice(0, 5)
+      .map(([id, v]) => {
+        const u = getUser(db, id)!;
+        return { id, name: u.name, plate: u.vehicle_plate, rides: v.rides, revenue: Math.round(v.revenue * 100) / 100, rating: ratingOf(u) };
+      });
+    const series = [...byDay.entries()].map(([date, v]) => ({ date, ...v, revenue: Math.round(v.revenue * 100) / 100 }));
+    const completed = series.reduce((a, d) => a + d.completed, 0);
+    const revenue = series.reduce((a, d) => a + d.revenue, 0);
+    return {
+      currency: tariff().currency,
+      timeZone: tz,
+      days: series,
+      statusCounts,
+      topDrivers,
+      totals: { rides: rows.length, completed, revenue, avgFare: completed ? Math.round((revenue / completed) * 100) / 100 : 0 },
+    };
+  }
+
   return {
+    analytics,
     tariff,
     setTariff,
     get,

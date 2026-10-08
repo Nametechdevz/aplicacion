@@ -26,8 +26,8 @@ ADMIN_PASSWORD=una-contraseña-larga-y-segura
 Con ese correo y contraseña entras como **Central** (panel de administración). Si algún día olvidas la contraseña, cámbiala en
 `.env` y reinicia la app.
 
-Si tu país no es España, cambia la moneda en la Central → Tarifas, y pon el centro del mapa por defecto en `.env` si quieres
-limitar la búsqueda de direcciones a tu país (`GEOCODER_COUNTRY_CODES=mx`, `co`, `ar`, `ec`, `pe`, `es`…).
+Los precios vienen por defecto en **pesos colombianos (COP)** y la hora en la de Colombia (`TIME_ZONE=America/Bogota`). Para limitar la
+búsqueda de direcciones a Colombia añade `GEOCODER_COUNTRY_CODES=co`. Las tarifas se cambian en la Central → Tarifas.
 
 ## 2a. Hosting con cPanel / Plesk («Setup Node.js App»)
 

@@ -2,7 +2,7 @@ import type { LatLng } from '../../shared/types';
 
 const fromEnv = (import.meta.env.VITE_DEFAULT_CENTER as string | undefined)?.split(',').map(Number);
 export const DEFAULT_CENTER: LatLng =
-  fromEnv && fromEnv.length === 2 && fromEnv.every(Number.isFinite) ? { lat: fromEnv[0], lng: fromEnv[1] } : { lat: 40.4168, lng: -3.7038 };
+  fromEnv && fromEnv.length === 2 && fromEnv.every(Number.isFinite) ? { lat: fromEnv[0], lng: fromEnv[1] } : { lat: 4.711, lng: -74.0721 };
 
 export function currentPosition(timeoutMs = 8000): Promise<LatLng> {
   return new Promise((resolve, reject) => {

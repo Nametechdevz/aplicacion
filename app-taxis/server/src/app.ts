@@ -42,16 +42,18 @@ const registerSchema = z.object({
     .optional(),
 });
 
+const money = z.number().min(0).max(100_000_000);
 const tariffSchema = z.object({
   currency: z
     .string()
     .trim()
     .regex(/^[A-Z]{3}$/, 'Moneda en formato ISO de 3 letras (USD, EUR, MXN…).'),
-  baseFare: z.number().min(0).max(10000),
-  perKm: z.number().min(0).max(10000),
-  perMinute: z.number().min(0).max(10000),
-  minimumFare: z.number().min(0).max(10000),
+  baseFare: money,
+  perKm: money,
+  perMinute: money,
+  minimumFare: money,
   surge: z.number().min(1).max(5),
+  roundTo: z.number().min(0.01).max(100_000),
 });
 
 function parse<T>(schema: z.ZodType<T>, data: unknown): T {
@@ -122,14 +124,21 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
     next();
   });
 
-  // Limitador simple para los intentos de inicio de sesión y registro.
+  // Limitador de fuerza bruta: cuenta solo los intentos fallidos (y todos los registros) por IP durante 15 minutos.
   const attempts = new Map<string, { n: number; reset: number }>();
-  const limitAuth = (req: Request, _res: Response, next: NextFunction) => {
+  const limitAuth = (req: Request, res: Response, next: NextFunction) => {
     const key = req.ip ?? 'unknown';
     const now = Date.now();
-    const a = attempts.get(key);
-    if (!a || a.reset < now) attempts.set(key, { n: 1, reset: now + 15 * 60_000 });
-    else if (++a.n > 30) throw new HttpError(429, 'Demasiados intentos. Espera unos minutos.');
+    let a = attempts.get(key);
+    if (!a || a.reset < now) {
+      a = { n: 0, reset: now + 15 * 60_000 };
+      attempts.set(key, a);
+    }
+    if (a.n >= 30) throw new HttpError(429, 'Demasiados intentos. Espera unos minutos.');
+    const entry = a;
+    res.on('finish', () => {
+      if (res.statusCode >= 400 || req.path.endsWith('/register')) entry.n++;
+    });
     next();
   };
 
@@ -143,7 +152,7 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
 
   // Configuración pública del cliente (mapa base).
   api.get('/config', (_req, res) => {
-    res.json({ tileUrl: config.tileUrl, tileAttribution: config.tileAttribution });
+    res.json({ tileUrl: config.tileUrl, tileAttribution: config.tileAttribution, timeZone: config.timeZone });
   });
 
   api.post('/auth/register', limitAuth, (req, res) => {
@@ -274,6 +283,11 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
 
   admin.get('/stats', (_req, res) => {
     res.json(rides.stats());
+  });
+
+  admin.get('/analytics', (req, res) => {
+    const days = Math.min(90, Math.max(1, Math.round(Number(req.query.days) || 14)));
+    res.json(rides.analytics(days));
   });
 
   admin.get('/users', (req, res) => {

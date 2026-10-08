@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { isValidTimeZone } from './time';
 
 export interface Config {
   port: number;
@@ -20,6 +21,8 @@ export interface Config {
   corsOrigin: string;
   /** Plantilla de URL de las teselas del mapa ({z}/{x}/{y}); vacía = la predeterminada del cliente. */
   tileUrl: string;
+  /** Zona horaria para "hoy", "esta semana" y las gráficas (IANA, p. ej. America/Bogota). */
+  timeZone: string;
   tileAttribution: string;
   clientDir: string | null;
 }
@@ -61,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     corsOrigin: env.CORS_ORIGIN ?? '',
     clientDir: env.CLIENT_DIR ?? 'client/dist',
     tileUrl: env.TILE_URL ?? '',
+    timeZone: timeZoneFrom(env.TIME_ZONE),
     tileAttribution: env.TILE_ATTRIBUTION ?? '',
   };
 }
@@ -75,4 +79,10 @@ function persistentSecret(file: string): string {
   writeFileSync(file, v, { mode: 0o600 });
   console.log(`[config] JWT_SECRET no definido: se generó uno y se guardó en ${file}`);
   return v;
+}
+
+function timeZoneFrom(v: string | undefined): string {
+  if (v && isValidTimeZone(v)) return v;
+  if (v) console.warn(`[config] TIME_ZONE "${v}" no es válida; se usa America/Bogota.`);
+  return 'America/Bogota';
 }
