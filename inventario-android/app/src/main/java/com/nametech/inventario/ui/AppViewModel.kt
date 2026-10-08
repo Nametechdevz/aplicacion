@@ -22,7 +22,9 @@ import com.nametech.inventario.domain.Filter
 import com.nametech.inventario.domain.today
 import com.nametech.inventario.util.Updater
 import com.nametech.inventario.work.ExpiryWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,6 +114,7 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
     }
 
     private fun handleError(e: Throwable) {
+        if (e is CancellationException) return
         message(describe(e))
         if (e is CloudException) {
             if (e.sessionLost) sessionLost()
@@ -125,19 +128,28 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
         viewModelScope.launch {
             try {
                 block()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 handleError(e)
             }
         }
     }
 
-    /** Igual que [launch] pero devuelve el resultado, o null si falló. */
-    suspend fun <T> safe(block: suspend () -> T): T? = try {
-        block()
-    } catch (e: Exception) {
-        handleError(e)
-        null
-    }
+    /**
+     * Igual que [launch] pero devuelve el resultado, o null si falló. Corre en el alcance del
+     * ViewModel: si la pantalla que la pidió se cierra, la operación igual termina (no queda a medias).
+     */
+    suspend fun <T> safe(block: suspend () -> T): T? = viewModelScope.async {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleError(e)
+            null
+        }
+    }.await()
 
     // ------------------------------------------------------------ ajustes
 
@@ -189,13 +201,26 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
         PendingLogin(base.trim(), token, user, hasData, local)
     }
 
-    /** Paso 2: guarda la sesión, sube los datos del teléfono si se pidió y descarga el inventario. */
-    suspend fun finishLogin(p: PendingLogin, uploadLocal: Boolean): Boolean {
+    /**
+     * Paso 2: sube los datos del teléfono si se pidió, guarda la sesión y descarga el inventario.
+     * Corre en el alcance del ViewModel porque la pantalla de inicio de sesión se cierra apenas
+     * se guarda la sesión.
+     */
+    suspend fun finishLogin(p: PendingLogin, uploadLocal: Boolean): Boolean = viewModelScope.async {
+        doFinishLogin(p, uploadLocal)
+    }.await()
+
+    private suspend fun doFinishLogin(p: PendingLogin, uploadLocal: Boolean): Boolean {
         val before = settingsRepo.current
         val sameUser = before.userId == p.user.id && before.lastRev > 0
         if (p.localItems > 0) {
             // Respaldo automático antes de cambiar los datos del teléfono.
             runCatching { container.backup.exportJsonToFile("antes-de-conectar-${LocalDate.now()}-${System.currentTimeMillis()}.json") }
+        }
+        if (uploadLocal && p.localItems > 0) {
+            // Se sube antes de guardar la sesión: si falla, todo queda como estaba.
+            val ok = safe { repo.uploadLocalData(p.base, p.token) } != null
+            if (!ok) return false
         }
         settingsRepo.update {
             it.copy(
@@ -210,14 +235,6 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
                 accessExpiresAt = p.user.expiresAt,
                 lastRev = if (sameUser) it.lastRev else 0,
             )
-        }
-        if (uploadLocal && p.localItems > 0) {
-            val ok = safe { repo.uploadLocalData() } != null
-            if (!ok) {
-                // No se pudo subir: se deja todo como estaba para no perder nada.
-                settingsRepo.update { before.copy(serverUrl = p.base) }
-                return false
-            }
         }
         val pulled = safe { repo.pull() } != null
         if (pulled) message("Bienvenido, ${p.user.name} 👋")
@@ -258,6 +275,8 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
                 repo.pull()
                 syncError = null
                 if (!quiet) message("Sincronizado ✅")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 syncError = describe(e)
                 if (e is CloudException && e.sessionLost) handleError(e) else if (!quiet) message(describe(e))
@@ -276,6 +295,8 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
                     syncing = true
                     repo.pull()
                     syncError = null
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     syncError = describe(e)
                     if (e is CloudException && e.sessionLost) {
@@ -327,6 +348,8 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
             try {
                 val file = Updater.download(app, r.url) { downloadProgress = it }
                 Updater.install(app, file)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 message("No se pudo descargar: ${e.message}. Se abrirá el navegador.")
                 Updater.openInBrowser(app, r.url)

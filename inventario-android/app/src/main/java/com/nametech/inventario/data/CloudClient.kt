@@ -211,7 +211,14 @@ class CloudClient(private val settings: SettingsRepository) {
         )
     }
 
-    suspend fun import(items: List<Item>, clients: List<Client>, sales: List<Sale>, brand: JSONObject) {
+    suspend fun import(
+        items: List<Item>,
+        clients: List<Client>,
+        sales: List<Sale>,
+        brand: JSONObject,
+        base: String = settings.current.serverUrl,
+        token: String = settings.current.authToken,
+    ) {
         request(
             "import",
             JSONObject()
@@ -219,6 +226,8 @@ class CloudClient(private val settings: SettingsRepository) {
                 .put("clients", JSONArray(clients.map { it.toJson() }))
                 .put("sales", JSONArray(sales.map { it.toJson() }))
                 .put("settings", brand),
+            base = base,
+            token = token,
         )
     }
 

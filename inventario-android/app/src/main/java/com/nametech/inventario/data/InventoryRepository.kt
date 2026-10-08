@@ -82,8 +82,8 @@ class InventoryRepository(
     }
 
     /** Sube los datos de este teléfono a una cuenta vacía del servidor. */
-    suspend fun uploadLocalData() {
-        cloud.import(allItems(), allClients(), allSales(), settings.current.brandJson())
+    suspend fun uploadLocalData(base: String, token: String) {
+        cloud.import(allItems(), allClients(), allSales(), settings.current.brandJson(), base, token)
     }
 
     suspend fun clearLocal() = db.withTransaction {
