@@ -115,71 +115,21 @@ private fun Hero(title: String, subtitle: String) {
     }
 }
 
-/** Primera vez: elegir trabajar solo en el teléfono o con la cuenta del servidor. */
-@Composable
-fun WelcomeScreen(vm: AppViewModel) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        Hero("Inventario Pro", "Cuentas streaming, cursos, sistemas y apps\ncon ventas, clientes y recordatorios")
-        Column(Modifier.padding(20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("¿Cómo quiere usar la app?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            ChoiceCard(
-                Icons.Filled.Cloud,
-                "Con mi cuenta (recomendado)",
-                "Inicie sesión con el usuario que le dio su proveedor. Su inventario queda guardado en la nube y lo puede abrir desde varios dispositivos.",
-            ) { vm.wantCloudMode() }
-            ChoiceCard(
-                Icons.Filled.PhoneAndroid,
-                "Solo en este teléfono",
-                "Sin usuario ni internet. Los datos quedan únicamente en este celular (puede conectarse más adelante desde Ajustes).",
-            ) { vm.chooseLocalMode() }
-        }
-    }
-}
-
-@Composable
-private fun ChoiceCard(icon: ImageVector, title: String, text: String, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }
-            SpacerW(14)
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
 /** Inicio de sesión con la cuenta del servidor. */
 @Composable
 fun LoginScreen(vm: AppViewModel) {
     val s by vm.settings.collectAsState()
     val scope = rememberCoroutineScope()
-    var server by rememberSaveable { mutableStateOf(s.serverUrl) }
     var user by rememberSaveable { mutableStateOf(s.username) }
     var pass by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<PendingLogin?>(null) }
 
     fun submit() {
-        if (busy || server.isBlank() || user.isBlank() || pass.isBlank()) return
+        if (busy || user.isBlank() || pass.isBlank()) return
         busy = true
         scope.launch {
-            val p = vm.login(server, user, pass)
+            val p = vm.login(BuildConfig.SERVER_URL, user, pass)
             if (p != null) {
                 if (p.localItems > 0) pending = p else vm.finishLogin(p, uploadLocal = false)
             }
@@ -195,21 +145,6 @@ fun LoginScreen(vm: AppViewModel) {
     ) {
         Hero("Iniciar sesión", if (s.userName.isNotBlank()) "Hola de nuevo, ${s.userName}" else "Entre con su usuario para ver su inventario")
         Column(Modifier.padding(20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SimpleField(
-                "Dirección del servidor",
-                server,
-                { server = it },
-                keyboardType = KeyboardType.Uri,
-                leading = Icons.Filled.Language,
-                supporting = "Ej. midominio.com/inventario (se la da su proveedor)",
-            )
-            if (server.trim().startsWith("http://")) {
-                Text(
-                    "⚠️ Sin https la contraseña viaja sin cifrar. Active SSL en su hosting.",
-                    color = Amber,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
             SimpleField("Usuario", user, { user = it }, leading = Icons.Filled.Person)
             OutlinedTextField(
                 value = pass,
@@ -223,15 +158,19 @@ fun LoginScreen(vm: AppViewModel) {
             )
             Button(
                 onClick = ::submit,
-                enabled = !busy && server.isNotBlank() && user.isNotBlank() && pass.isNotBlank(),
+                enabled = !busy && user.isNotBlank() && pass.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
             ) {
                 if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White) else Text("Entrar")
             }
-            TextButton(onClick = { vm.cancelCloudMode() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Usar solo en este teléfono, sin cuenta")
-            }
+            Text(
+                "¿No tiene usuario? Solicítelo a su proveedor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 
@@ -575,11 +514,6 @@ fun AccountCardContent(vm: AppViewModel, nav: Nav, onChangePassword: () -> Unit,
         )
         TextButton(onClick = { vm.syncNow() }) { Text("Sincronizar") }
     }
-    Text(
-        "Servidor: ${s.serverUrl}",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     SpacerH(8)
     if (s.isAdmin) {
         Button(onClick = { nav.users() }, modifier = Modifier.fillMaxWidth()) {

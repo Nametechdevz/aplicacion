@@ -1,2 +1,2 @@
+• Acceso solo con usuario y contraseña (el servidor ya viene configurado).
 • Corrige el error «The coroutine scope left the composition» al iniciar sesión o guardar.
-• Iniciar sesión, subir datos y guardar ahora terminan aunque se cambie de pantalla.

@@ -118,9 +118,10 @@ class SettingsRepository(context: Context) {
             templatePayment = prefs.getString("templatePayment", d.templatePayment)!!,
             pinHash = prefs.getString("pinHash", d.pinHash)!!,
             themeMode = prefs.getString("themeMode", d.themeMode)!!,
-            modeChosen = prefs.getBoolean("modeChosen", d.modeChosen),
-            cloudMode = prefs.getBoolean("cloudMode", d.cloudMode),
-            serverUrl = prefs.getString("serverUrl", d.serverUrl)!!,
+            // Acceso solo con usuario y contraseña al servidor fijo de la app.
+            modeChosen = true,
+            cloudMode = true,
+            serverUrl = com.nametech.inventario.BuildConfig.SERVER_URL,
             authToken = prefs.getString("authToken", d.authToken)!!,
             userId = prefs.getLong("userId", d.userId),
             userName = prefs.getString("userName", d.userName)!!,

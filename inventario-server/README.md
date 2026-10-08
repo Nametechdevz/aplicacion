@@ -14,13 +14,15 @@ Servidor para la app Android **Inventario Pro**. Se instala en cualquier hosting
 
 1. **Base de datos**: en cPanel → *Bases de datos MySQL*, cree una base de datos y un usuario con
    contraseña, y asigne el usuario a la base con **todos los privilegios**.
-2. **Subir archivos**: en cPanel → *Administrador de archivos*, entre a `public_html`, cree una
-   carpeta (ej. `inventario`), suba el ZIP `InventarioPro-hosting-*.zip` y use **Extraer**.
-3. **Instalar**: abra `https://su-dominio.com/inventario/install.php`, escriba los datos de la base
+2. **Subir archivos**: en cPanel → *Administrador de archivos*, entre a la carpeta raíz del dominio
+   `whatsflow.gdsmanager.com`, suba el ZIP `InventarioPro-hosting-*.zip` y use **Extraer** (los
+   archivos `api.php`, `panel.php`… deben quedar en la raíz, no dentro de otra carpeta).
+3. **Instalar**: abra `https://whatsflow.gdsmanager.com/install.php`, escriba los datos de la base
    de datos y su usuario administrador, y pulse *Instalar*.
 4. **Seguridad**: elimine `install.php` desde el administrador de archivos.
-5. **App**: en la app elija *Con mi cuenta* y escriba `su-dominio.com/inventario`, su usuario y
-   contraseña. El panel web queda en `https://su-dominio.com/inventario/`.
+5. **App**: la app trae fija la dirección `https://whatsflow.gdsmanager.com` (se cambia en
+   `inventario-android/app/build.gradle.kts`, campo `SERVER_URL`). Cada usuario solo escribe su
+   usuario y contraseña. El panel web queda en esa misma dirección.
 
 Active el certificado SSL gratuito del hosting (*SSL/TLS* o *Let's Encrypt*) para usar `https://`.
 

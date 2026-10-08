@@ -42,7 +42,6 @@ import com.nametech.inventario.ui.screens.ClientDetailScreen
 import com.nametech.inventario.ui.screens.LoginScreen
 import com.nametech.inventario.ui.screens.UpdateDialog
 import com.nametech.inventario.ui.screens.UsersScreen
-import com.nametech.inventario.ui.screens.WelcomeScreen
 import com.nametech.inventario.ui.screens.ClientEditScreen
 import com.nametech.inventario.ui.screens.ClientsScreen
 import com.nametech.inventario.ui.screens.DashboardScreen
@@ -85,15 +84,10 @@ class Nav(private val nav: NavHostController) {
 fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>) {
     val context = LocalContext.current
     val settingsState by vm.settings.collectAsState()
-    val itemsState by vm.items.collectAsState()
 
     // Mensajes (errores de conexión, confirmaciones).
     LaunchedEffect(Unit) {
         vm.messages.collect { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
-    }
-    // Quien ya tenía datos de una versión anterior sigue en modo teléfono sin ver la bienvenida.
-    LaunchedEffect(itemsState, settingsState.modeChosen) {
-        if (!settingsState.modeChosen && !itemsState.isNullOrEmpty()) vm.chooseLocalMode()
     }
 
     vm.availableUpdate?.let { if (!vm.updateDismissed) UpdateDialog(vm, it) }
@@ -103,16 +97,8 @@ fun AppRoot(vm: AppViewModel, openRequest: MutableState<String?>) {
             Surface(Modifier.fillMaxSize()) { LockScreen(vm) }
             return
         }
-        !settingsState.modeChosen && itemsState != null && itemsState!!.isEmpty() -> {
-            Surface(Modifier.fillMaxSize()) { WelcomeScreen(vm) }
-            return
-        }
         settingsState.needsLogin -> {
             Surface(Modifier.fillMaxSize()) { LoginScreen(vm) }
-            return
-        }
-        !settingsState.modeChosen -> {
-            Surface(Modifier.fillMaxSize()) {}
             return
         }
     }

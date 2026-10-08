@@ -98,20 +98,7 @@ fun SettingsScreen(vm: AppViewModel, nav: Nav) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SectionCard("Mi cuenta") {
-                if (s.isCloud) {
-                    AccountCardContent(vm, nav, onChangePassword = { passwordDialog = true }, onLogout = { confirmLogout = true })
-                } else {
-                    Text("Está usando la app solo en este teléfono.", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "Conéctese con su usuario para guardar su inventario en la nube y abrirlo desde varios dispositivos. Podrá subir los datos que ya tiene.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    SpacerH(8)
-                    Button(onClick = { vm.wantCloudMode() }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Filled.Cloud, null); SpacerW(6); Text("Conectarme con mi cuenta")
-                    }
-                }
+                AccountCardContent(vm, nav, onChangePassword = { passwordDialog = true }, onLogout = { confirmLogout = true })
             }
 
             SectionCard("Apariencia") {

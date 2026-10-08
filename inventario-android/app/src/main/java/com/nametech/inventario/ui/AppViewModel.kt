@@ -181,13 +181,6 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
 
     fun testNotification() = ExpiryWorker.runNow(app)
 
-    fun chooseLocalMode() = settingsRepo.update { it.copy(modeChosen = true, cloudMode = false) }
-
-    fun wantCloudMode() = settingsRepo.update { it.copy(modeChosen = true, cloudMode = true) }
-
-    /** Volver a usar la app solo en el teléfono (desde la pantalla de inicio de sesión). */
-    fun cancelCloudMode() = settingsRepo.update { it.copy(cloudMode = false, authToken = "") }
-
     // ------------------------------------------------------------ sesión
 
     /** Paso 1: valida usuario y contraseña. Devuelve los datos para decidir qué hacer con lo local. */
@@ -224,9 +217,6 @@ class AppViewModel(private val app: InventarioApp) : ViewModel() {
         }
         settingsRepo.update {
             it.copy(
-                modeChosen = true,
-                cloudMode = true,
-                serverUrl = p.base,
                 authToken = p.token,
                 userId = p.user.id,
                 userName = p.user.name,
