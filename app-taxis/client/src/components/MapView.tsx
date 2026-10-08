@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { LatLng } from '../../../shared/types';
+import { tileConfig } from '../mapConfig';
 
 export type MarkerKind = 'pickup' | 'dropoff' | 'car' | 'car-busy' | 'car-off' | 'me';
 
@@ -56,10 +57,15 @@ export default function MapView({ center, zoom = 15, markers = [], route, fitKey
   useEffect(() => {
     if (!el.current || map.current) return;
     const m = L.map(el.current, { zoomControl: false, attributionControl: true }).setView([center.lat, center.lng], zoom);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(m);
+    void tileConfig().then((t) => {
+      if (map.current !== m) return;
+      L.tileLayer(t.url, {
+        maxZoom: 19,
+        attribution: t.attribution,
+        // Sin esto OpenStreetMap rechaza las teselas ("Access blocked").
+        referrerPolicy: 'strict-origin-when-cross-origin',
+      }).addTo(m);
+    });
     L.control.zoom({ position: 'topright' }).addTo(m);
     m.on('click', (e: L.LeafletMouseEvent) => clickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }));
     layer.current = L.layerGroup().addTo(m);

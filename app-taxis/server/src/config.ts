@@ -18,6 +18,9 @@ export interface Config {
   dispatchRadiusKm: number;
   rideRequestTimeoutS: number;
   corsOrigin: string;
+  /** Plantilla de URL de las teselas del mapa ({z}/{x}/{y}); vacía = la predeterminada del cliente. */
+  tileUrl: string;
+  tileAttribution: string;
   clientDir: string | null;
 }
 
@@ -57,6 +60,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rideRequestTimeoutS: num(env.RIDE_REQUEST_TIMEOUT_S, 180),
     corsOrigin: env.CORS_ORIGIN ?? '',
     clientDir: env.CLIENT_DIR ?? 'client/dist',
+    tileUrl: env.TILE_URL ?? '',
+    tileAttribution: env.TILE_ATTRIBUTION ?? '',
   };
 }
 

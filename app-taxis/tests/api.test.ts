@@ -294,6 +294,13 @@ describe('API de la App de Taxis', () => {
     expect(evil.headers.get('access-control-allow-origin')).toBeNull();
   });
 
+  it('expone la configuración del mapa sin sesión y deja que el mapa sepa el origen', async () => {
+    const r = await fetch(`${base}/api/config`);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ tileUrl: '', tileAttribution: '' });
+    expect(r.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+  });
+
   it('rechaza peticiones sin sesión', async () => {
     expect((await call('GET', '/me')).status).toBe(401);
     expect((await call('GET', '/me', 'token-falso')).status).toBe(401);

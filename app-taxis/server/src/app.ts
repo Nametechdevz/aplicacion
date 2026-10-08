@@ -101,7 +101,8 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
   app.use(express.json({ limit: '100kb' }));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'same-origin');
+    // Los servidores de mapas de OpenStreetMap exigen saber desde qué web se piden las teselas (cabecera Referer).
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
     next();
   });
@@ -138,6 +139,11 @@ export function createApp(config: Config, opts: { geo?: Geo } = {}) {
 
   api.get('/health', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // Configuración pública del cliente (mapa base).
+  api.get('/config', (_req, res) => {
+    res.json({ tileUrl: config.tileUrl, tileAttribution: config.tileAttribution });
   });
 
   api.post('/auth/register', limitAuth, (req, res) => {
