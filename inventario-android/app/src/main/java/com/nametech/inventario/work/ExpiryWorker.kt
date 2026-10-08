@@ -44,6 +44,9 @@ class ExpiryWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val force = inputData.getBoolean(KEY_FORCE, false)
         if (!s.notificationsEnabled && !force) return Result.success()
 
+        // Con servidor: traer primero los cambios hechos desde otros dispositivos.
+        if (s.isCloud) runCatching { container.repository.pull() }
+
         val t = today()
         val clients = container.repository.allClients().associateBy { it.id }
         val active = container.repository.allItems().filter { it.status != ItemStatus.INACTIVE }

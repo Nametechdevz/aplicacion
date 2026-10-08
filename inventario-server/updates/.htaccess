@@ -1,0 +1,4 @@
+# Solo se sirven los APK y release.json de esta carpeta.
+<FilesMatch "\.(php|phtml|phar)$">
+    Require all denied
+</FilesMatch>

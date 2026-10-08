@@ -9,6 +9,7 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.Upsert
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +42,15 @@ interface ItemDao {
 
     @Query("DELETE FROM items")
     suspend fun clear()
+
+    @Upsert
+    suspend fun upsert(items: List<Item>)
+
+    @Query("DELETE FROM items WHERE id IN (:ids)")
+    suspend fun deleteIds(ids: List<Long>)
+
+    @Query("SELECT COUNT(*) FROM items")
+    suspend fun count(): Int
 }
 
 @Dao
@@ -68,6 +78,12 @@ interface ClientDao {
 
     @Query("DELETE FROM clients")
     suspend fun clear()
+
+    @Upsert
+    suspend fun upsert(clients: List<Client>)
+
+    @Query("DELETE FROM clients WHERE id IN (:ids)")
+    suspend fun deleteIds(ids: List<Long>)
 }
 
 @Dao
@@ -95,9 +111,15 @@ interface SaleDao {
 
     @Query("DELETE FROM sales")
     suspend fun clear()
+
+    @Upsert
+    suspend fun upsert(sales: List<Sale>)
+
+    @Query("DELETE FROM sales WHERE id IN (:ids)")
+    suspend fun deleteIds(ids: List<Long>)
 }
 
-@Database(entities = [Item::class, Client::class, Sale::class], version = 2, exportSchema = true)
+@Database(entities = [Item::class, Client::class, Sale::class], version = 3, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun items(): ItemDao
     abstract fun clients(): ClientDao
@@ -106,7 +128,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "inventario.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
 
         /** v2: cuentas completas con perfiles. */
@@ -115,6 +137,16 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE items ADD COLUMN kind TEXT NOT NULL DEFAULT 'SINGLE'")
                 db.execSQL("ALTER TABLE items ADD COLUMN parentId INTEGER DEFAULT NULL")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_items_parentId ON items(parentId)")
+            }
+        }
+
+        /** v3: sincronización con servidor (revisiones y vendedor de cada venta). */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN rev INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE clients ADD COLUMN rev INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sales ADD COLUMN rev INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sales ADD COLUMN createdBy TEXT NOT NULL DEFAULT ''")
             }
         }
     }

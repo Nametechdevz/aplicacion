@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -99,6 +100,7 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     // Cuenta con perfiles: vender completa o un perfil.
     var sellFull by rememberSaveable { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
     var profileId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(item.id) {
@@ -143,8 +145,11 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
         } else {
             item.id
         }
+        if (saving) return
+        saving = true
         scope.launch {
-            val result = vm.repo.sell(
+            val result = vm.safe {
+                vm.repo.sell(
                 itemId = targetId,
                 clientId = if (useExisting) clientId else null,
                 newClientName = newName,
@@ -153,9 +158,11 @@ fun SellScreen(vm: AppViewModel, nav: Nav, itemId: Long) {
                 price = Fmt.parseMoney(price),
                 clientExpiration = clientExp,
                 paid = paid,
-            )
+                )
+            }
+            saving = false
             if (result == null) {
-                error = "No se pudo vender: la cuenta o el perfil ya no está disponible"
+                error = "No se pudo registrar la venta. Revise e intente de nuevo."
                 return@launch
             }
             if (sendNow) sendCredentials(context, s, today, result.first, result.second)

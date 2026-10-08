@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import com.nametech.inventario.data.AppDatabase
 import com.nametech.inventario.data.BackupManager
+import com.nametech.inventario.data.CloudClient
 import com.nametech.inventario.data.InventoryRepository
 import com.nametech.inventario.data.SettingsRepository
 import com.nametech.inventario.work.ExpiryWorker
@@ -11,7 +12,8 @@ import com.nametech.inventario.work.ExpiryWorker
 class AppContainer(context: Context) {
     private val db = AppDatabase.build(context)
     val settings = SettingsRepository(context)
-    val repository = InventoryRepository(db)
+    val cloud = CloudClient(settings)
+    val repository = InventoryRepository(db, cloud, settings)
     val backup = BackupManager(context, repository)
 }
 

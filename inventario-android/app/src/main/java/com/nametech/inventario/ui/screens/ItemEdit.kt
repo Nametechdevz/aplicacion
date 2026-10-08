@@ -132,13 +132,15 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
                 expirationDate = expiration,
                 notes = notes.trim(),
             )
-            if (isNew && withProfiles) {
-                val each = Fmt.parseMoney(profilePrice)
-                vm.repo.createAccount(item.copy(profilePin = ""), profileNames.map { it.trim() to each })
-            } else {
-                vm.repo.saveItem(item, copies = if (isNew) (copies.toIntOrNull() ?: 1).coerceIn(1, 50) else 1)
+            val ok = vm.safe {
+                if (isNew && withProfiles) {
+                    val each = Fmt.parseMoney(profilePrice)
+                    vm.repo.createAccount(item.copy(profilePin = ""), profileNames.map { it.trim() to each })
+                } else {
+                    vm.repo.saveItem(item, copies = if (isNew) (copies.toIntOrNull() ?: 1).coerceIn(1, 50) else 1)
+                }
             }
-            nav.back()
+            if (ok != null) nav.back()
         }
     }
 

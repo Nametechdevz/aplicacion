@@ -329,8 +329,8 @@ fun ClientEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
         }
         scope.launch {
             val base = if (isNew) Client() else vm.repo.getClient(id) ?: return@launch
-            vm.repo.saveClient(base.copy(name = name.trim(), whatsapp = phone.trim(), email = email.trim(), notes = notes.trim()))
-            nav.back()
+            val ok = vm.safe { vm.repo.saveClient(base.copy(name = name.trim(), whatsapp = phone.trim(), email = email.trim(), notes = notes.trim())) }
+            if (ok != null) nav.back()
         }
     }
 

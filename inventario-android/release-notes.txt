@@ -1,0 +1,5 @@
+• Cuenta en la nube: entre con su usuario y vea su inventario desde varios dispositivos.
+• Cada revendedor tiene su propio inventario, clientes y marca.
+• Panel web para el administrador y para cada usuario.
+• Avisos de actualización dentro de la app.
+• Tema claro/oscuro y más ajustes.

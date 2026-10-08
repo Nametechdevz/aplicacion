@@ -21,7 +21,48 @@ data class AppSettings(
     val templateExpired: String = Templates.DEFAULT_EXPIRED,
     val templatePayment: String = Templates.DEFAULT_PAYMENT,
     val pinHash: String = "",
-)
+    // ---- Tema
+    /** SYSTEM, LIGHT o DARK. */
+    val themeMode: String = "SYSTEM",
+    // ---- Cuenta en el servidor (vacío = solo en este teléfono)
+    val modeChosen: Boolean = false,
+    /** true = el usuario trabaja con su cuenta del servidor. */
+    val cloudMode: Boolean = false,
+    val serverUrl: String = "",
+    val authToken: String = "",
+    val userId: Long = 0,
+    val userName: String = "",
+    val username: String = "",
+    val userRole: String = "",
+    val accessExpiresAt: Long = 0,
+    val lastRev: Long = 0,
+    val lastSyncAt: Long = 0,
+) {
+    val isCloud: Boolean get() = cloudMode && serverUrl.isNotBlank() && authToken.isNotBlank()
+    val needsLogin: Boolean get() = cloudMode && authToken.isBlank()
+    val isAdmin: Boolean get() = isCloud && userRole == "ADMIN"
+
+    /** Marca y preferencias que se guardan en el servidor y se comparten entre los dispositivos del usuario. */
+    fun brandJson(): org.json.JSONObject = org.json.JSONObject()
+        .put("businessName", businessName).put("currencySymbol", currencySymbol)
+        .put("currencyDecimals", currencyDecimals).put("countryCode", countryCode)
+        .put("dueSoonDays", dueSoonDays).put("defaultSaleMonths", defaultSaleMonths)
+        .put("templateCredentials", templateCredentials).put("templateReminder", templateReminder)
+        .put("templateExpired", templateExpired).put("templatePayment", templatePayment)
+
+    fun withBrand(j: org.json.JSONObject): AppSettings = copy(
+        businessName = j.optString("businessName", businessName),
+        currencySymbol = j.optString("currencySymbol", currencySymbol),
+        currencyDecimals = j.optInt("currencyDecimals", currencyDecimals),
+        countryCode = j.optString("countryCode", countryCode),
+        dueSoonDays = j.optInt("dueSoonDays", dueSoonDays),
+        defaultSaleMonths = j.optInt("defaultSaleMonths", defaultSaleMonths),
+        templateCredentials = j.optString("templateCredentials", templateCredentials),
+        templateReminder = j.optString("templateReminder", templateReminder),
+        templateExpired = j.optString("templateExpired", templateExpired),
+        templatePayment = j.optString("templatePayment", templatePayment),
+    )
+}
 
 object Templates {
     const val DEFAULT_CREDENTIALS = "Hola {cliente} 👋\n" +
@@ -76,9 +117,22 @@ class SettingsRepository(context: Context) {
             templateExpired = prefs.getString("templateExpired", d.templateExpired)!!,
             templatePayment = prefs.getString("templatePayment", d.templatePayment)!!,
             pinHash = prefs.getString("pinHash", d.pinHash)!!,
+            themeMode = prefs.getString("themeMode", d.themeMode)!!,
+            modeChosen = prefs.getBoolean("modeChosen", d.modeChosen),
+            cloudMode = prefs.getBoolean("cloudMode", d.cloudMode),
+            serverUrl = prefs.getString("serverUrl", d.serverUrl)!!,
+            authToken = prefs.getString("authToken", d.authToken)!!,
+            userId = prefs.getLong("userId", d.userId),
+            userName = prefs.getString("userName", d.userName)!!,
+            username = prefs.getString("username", d.username)!!,
+            userRole = prefs.getString("userRole", d.userRole)!!,
+            accessExpiresAt = prefs.getLong("accessExpiresAt", d.accessExpiresAt),
+            lastRev = prefs.getLong("lastRev", d.lastRev),
+            lastSyncAt = prefs.getLong("lastSyncAt", d.lastSyncAt),
         )
     }
 
+    @Synchronized
     fun update(transform: (AppSettings) -> AppSettings) {
         val s = transform(state.value)
         prefs.edit()
@@ -96,6 +150,18 @@ class SettingsRepository(context: Context) {
             .putString("templateExpired", s.templateExpired)
             .putString("templatePayment", s.templatePayment)
             .putString("pinHash", s.pinHash)
+            .putString("themeMode", s.themeMode)
+            .putBoolean("modeChosen", s.modeChosen)
+            .putBoolean("cloudMode", s.cloudMode)
+            .putString("serverUrl", s.serverUrl)
+            .putString("authToken", s.authToken)
+            .putLong("userId", s.userId)
+            .putString("userName", s.userName)
+            .putString("username", s.username)
+            .putString("userRole", s.userRole)
+            .putLong("accessExpiresAt", s.accessExpiresAt)
+            .putLong("lastRev", s.lastRev)
+            .putLong("lastSyncAt", s.lastSyncAt)
             .apply()
         state.value = s
     }

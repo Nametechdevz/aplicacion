@@ -3,7 +3,16 @@ package com.nametech.inventario.data
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 
-class InventoryRepository(private val db: AppDatabase) {
+/**
+ * Operaciones del inventario. Cada operación arma un [ChangeSet]: sin servidor se guarda directo
+ * en el teléfono; con servidor se envía primero (en una transacción) y luego se guarda la versión
+ * que devuelve el servidor, así todos los dispositivos del usuario quedan iguales.
+ */
+class InventoryRepository(
+    private val db: AppDatabase,
+    private val cloud: CloudClient,
+    private val settings: SettingsRepository,
+) {
     private val itemDao = db.items()
     private val clientDao = db.clients()
     private val saleDao = db.sales()
@@ -17,31 +26,73 @@ class InventoryRepository(private val db: AppDatabase) {
     suspend fun allItems() = itemDao.getAll()
     suspend fun allClients() = clientDao.getAll()
     suspend fun allSales() = saleDao.getAll()
+    suspend fun countItems() = itemDao.count()
 
-    /**
-     * Crea o actualiza un producto. Al crear con [copies] > 1 se generan varias unidades
-     * (p. ej. los perfiles de una misma cuenta); si no tienen perfil se numeran solas.
-     */
-    suspend fun saveItem(item: Item, copies: Int = 1): Long {
-        val now = System.currentTimeMillis()
-        if (item.id != 0L) {
-            db.withTransaction {
-                itemDao.update(item.copy(updatedAt = now))
-                if (item.isAccount) syncProfiles(item)
-            }
-            return item.id
+    /** Guarda los cambios (en el servidor si hay sesión). */
+    private suspend fun commit(cs: ChangeSet) {
+        if (!settings.current.isCloud) {
+            applyLocal(cs.items, cs.clients, cs.sales, cs.deleteItems, cs.deleteClients, cs.deleteSales)
+            return
         }
-        if (copies <= 1) return itemDao.insert(item.copy(createdAt = now, updatedAt = now))
-        var firstId = 0L
-        db.withTransaction {
-            for (i in 1..copies) {
-                val profile = item.profilePin.ifBlank { "Perfil $i" }
-                val id = itemDao.insert(item.copy(profilePin = profile, createdAt = now + i, updatedAt = now + i))
-                if (i == 1) firstId = id
-            }
-        }
-        return firstId
+        val result = cloud.commit(cs)
+        applyLocal(result.items, result.clients, result.sales, cs.deleteItems, cs.deleteClients, cs.deleteSales)
     }
+
+    private suspend fun applyLocal(
+        items: List<Item>,
+        clients: List<Client>,
+        sales: List<Sale>,
+        deleteItems: List<Long>,
+        deleteClients: List<Long>,
+        deleteSales: List<Long>,
+    ) = db.withTransaction {
+        if (clients.isNotEmpty()) clientDao.upsert(clients)
+        if (items.isNotEmpty()) itemDao.upsert(items)
+        if (sales.isNotEmpty()) saleDao.upsert(sales)
+        if (deleteSales.isNotEmpty()) saleDao.deleteIds(deleteSales)
+        if (deleteItems.isNotEmpty()) itemDao.deleteIds(deleteItems)
+        if (deleteClients.isNotEmpty()) clientDao.deleteIds(deleteClients)
+    }
+
+    // ------------------------------------------------------------ sincronización
+
+    /** Trae los cambios hechos desde otros dispositivos. Con since=0 reemplaza todo lo local. */
+    suspend fun pull(): SyncResult {
+        val since = settings.current.lastRev
+        val r = cloud.sync(since)
+        db.withTransaction {
+            if (since == 0L) {
+                saleDao.clear()
+                itemDao.clear()
+                clientDao.clear()
+            }
+            applyLocal(r.items, r.clients, r.sales, r.deletedItems, r.deletedClients, r.deletedSaleIds)
+        }
+        settings.update { s ->
+            val base = s.copy(
+                lastRev = r.rev,
+                lastSyncAt = System.currentTimeMillis(),
+                userName = r.user.name,
+                userRole = r.user.role,
+                accessExpiresAt = r.user.expiresAt,
+            )
+            if (r.brand != null) base.withBrand(r.brand) else base
+        }
+        return r
+    }
+
+    /** Sube los datos de este teléfono a una cuenta vacía del servidor. */
+    suspend fun uploadLocalData() {
+        cloud.import(allItems(), allClients(), allSales(), settings.current.brandJson())
+    }
+
+    suspend fun clearLocal() = db.withTransaction {
+        saleDao.clear()
+        itemDao.clear()
+        clientDao.clear()
+    }
+
+    // ------------------------------------------------------------ productos
 
     /** Datos de la cuenta que comparten todos sus perfiles. */
     private fun Item.withAccountData(account: Item) = copy(
@@ -57,27 +108,55 @@ class InventoryRepository(private val db: AppDatabase) {
         expirationDate = account.expirationDate,
     )
 
-    /** Si se cambia la clave, el correo o el vencimiento de la cuenta, se copia a sus perfiles. */
-    private suspend fun syncProfiles(account: Item) {
-        itemDao.profilesOf(account.id).forEach { p ->
-            itemDao.update(p.withAccountData(account).copy(updatedAt = System.currentTimeMillis()))
+    /** Si cambia la clave, el correo o el vencimiento de la cuenta, se copia a sus perfiles. */
+    private suspend fun syncProfiles(cs: ChangeSet, account: Item) {
+        val now = System.currentTimeMillis()
+        itemDao.profilesOf(account.id).forEach { p -> cs.put(p.withAccountData(account).copy(updatedAt = now), p) }
+    }
+
+    /**
+     * Crea o actualiza un producto. Al crear con [copies] > 1 se generan varias unidades iguales;
+     * si no tienen perfil se numeran solas.
+     */
+    suspend fun saveItem(item: Item, copies: Int = 1): Long {
+        val now = System.currentTimeMillis()
+        val cs = ChangeSet()
+        val id: Long
+        if (item.id != 0L) {
+            id = item.id
+            val updated = item.copy(updatedAt = now)
+            cs.put(updated, itemDao.get(item.id))
+            if (item.isAccount) syncProfiles(cs, updated)
+        } else if (copies <= 1) {
+            id = newId()
+            cs.put(item.copy(id = id, createdAt = now, updatedAt = now))
+        } else {
+            id = newId()
+            for (i in 1..copies) {
+                val profile = item.profilePin.ifBlank { "Perfil $i" }
+                cs.put(item.copy(id = if (i == 1) id else newId(), profilePin = profile, createdAt = now + i, updatedAt = now + i))
+            }
         }
+        commit(cs)
+        return id
     }
 
     /**
      * Crea una cuenta completa con sus perfiles. [profiles] = nombre/PIN y precio de cada perfil.
      * El costo de la cuenta se reparte entre los perfiles para calcular la ganancia por perfil.
      */
-    suspend fun createAccount(account: Item, profiles: List<Pair<String, Double>>): Long = db.withTransaction {
+    suspend fun createAccount(account: Item, profiles: List<Pair<String, Double>>): Long {
         val now = System.currentTimeMillis()
-        val parent = account.copy(kind = ItemKind.ACCOUNT, parentId = null, createdAt = now, updatedAt = now)
-        val parentId = itemDao.insert(parent)
+        val parent = account.copy(id = newId(), kind = ItemKind.ACCOUNT, parentId = null, createdAt = now, updatedAt = now)
+        val cs = ChangeSet()
+        cs.put(parent)
         val unitCost = if (profiles.isEmpty()) 0.0 else account.costPrice / profiles.size
         profiles.forEachIndexed { i, (label, price) ->
-            itemDao.insert(
+            cs.put(
                 Item(
+                    id = newId(),
                     kind = ItemKind.PROFILE,
-                    parentId = parentId,
+                    parentId = parent.id,
                     profilePin = label.ifBlank { "Perfil ${i + 1}" },
                     suggestedPrice = price,
                     costPrice = unitCost,
@@ -86,14 +165,18 @@ class InventoryRepository(private val db: AppDatabase) {
                 ).withAccountData(parent),
             )
         }
-        parentId
+        commit(cs)
+        return parent.id
     }
 
     suspend fun addProfile(account: Item, label: String, price: Double) {
         val count = itemDao.profilesOf(account.id).size
         val now = System.currentTimeMillis()
-        itemDao.insert(
+        val cs = ChangeSet()
+        cs.read(account)
+        cs.put(
             Item(
+                id = newId(),
                 kind = ItemKind.PROFILE,
                 parentId = account.id,
                 profilePin = label.ifBlank { "Perfil ${count + 1}" },
@@ -102,39 +185,31 @@ class InventoryRepository(private val db: AppDatabase) {
                 updatedAt = now,
             ).withAccountData(account),
         )
+        commit(cs)
     }
 
     suspend fun duplicate(item: Item, copies: Int): Long {
-        val base = item.copy(
-            id = 0,
-            status = ItemStatus.AVAILABLE,
-            clientId = null,
-            saleDate = null,
-            salePrice = 0.0,
-            clientExpirationDate = null,
-            paid = true,
-            lastReminderAt = null,
+        fun Item.fresh(newId: Long, parent: Long?, t: Long) = copy(
+            id = newId, parentId = parent, status = ItemStatus.AVAILABLE, clientId = null, saleDate = null,
+            salePrice = 0.0, clientExpirationDate = null, paid = true, lastReminderAt = null,
+            createdAt = t, updatedAt = t, rev = 0,
         )
+        val cs = ChangeSet()
+        val now = System.currentTimeMillis()
+        val profiles = if (item.isAccount) itemDao.profilesOf(item.id) else emptyList()
         var firstId = 0L
-        db.withTransaction {
-            val now = System.currentTimeMillis()
-            val profiles = if (item.isAccount) itemDao.profilesOf(item.id) else emptyList()
-            repeat(copies) { i ->
-                val id = itemDao.insert(base.copy(createdAt = now + i, updatedAt = now + i))
-                if (i == 0) firstId = id
-                profiles.forEachIndexed { j, p ->
-                    itemDao.insert(
-                        p.copy(
-                            id = 0, parentId = id, status = ItemStatus.AVAILABLE, clientId = null, saleDate = null,
-                            salePrice = 0.0, clientExpirationDate = null, paid = true, lastReminderAt = null,
-                            createdAt = now + i + j + 1, updatedAt = now + i + j + 1,
-                        ),
-                    )
-                }
-            }
+        repeat(copies) { i ->
+            val id = newId()
+            if (i == 0) firstId = id
+            cs.put(item.fresh(id, item.parentId, now + i))
+            profiles.forEachIndexed { j, p -> cs.put(p.fresh(newId(), id, now + i + j + 1)) }
         }
+        commit(cs)
         return firstId
     }
+
+    /** No se pudo vender porque cambió el estado (otro dispositivo, cuenta ya vendida, etc.). */
+    class NotAvailableException(message: String) : Exception(message)
 
     /**
      * Vende un producto (o edita la venta si ya estaba vendido).
@@ -149,22 +224,28 @@ class InventoryRepository(private val db: AppDatabase) {
         price: Double,
         clientExpiration: Long?,
         paid: Boolean,
-    ): Pair<Item, Client>? = db.withTransaction {
-        val item = itemDao.get(itemId) ?: return@withTransaction null
-        // Cuenta completa: no se puede vender si ya hay perfiles vendidos.
-        if (item.isAccount && item.status != ItemStatus.SOLD &&
-            itemDao.profilesOf(item.id).any { it.status == ItemStatus.SOLD }
-        ) return@withTransaction null
-        // Perfil: no se puede vender si la cuenta completa ya está vendida.
-        if (item.isProfile && item.parentId?.let { itemDao.get(it) }?.status == ItemStatus.SOLD) return@withTransaction null
-        val client = if (clientId != null) {
-            clientDao.get(clientId)
-        } else {
-            val c = Client(name = newClientName.trim(), whatsapp = newClientPhone.trim())
-            c.copy(id = clientDao.insert(c))
-        } ?: return@withTransaction null
-
+    ): Pair<Item, Client> {
+        val item = itemDao.get(itemId) ?: throw NotAvailableException("El producto ya no existe")
+        val cs = ChangeSet()
         val wasSold = item.status == ItemStatus.SOLD
+        if (item.isAccount && !wasSold) {
+            val profiles = itemDao.profilesOf(item.id)
+            if (profiles.any { it.status == ItemStatus.SOLD }) {
+                throw NotAvailableException("La cuenta completa no se puede vender: ya tiene perfiles vendidos")
+            }
+            profiles.forEach { cs.read(it) }
+        }
+        if (item.isProfile && !wasSold) {
+            val parent = item.parentId?.let { itemDao.get(it) }
+            if (parent?.status == ItemStatus.SOLD) throw NotAvailableException("La cuenta completa ya está vendida")
+            parent?.let { cs.read(it) }
+        }
+        val client = if (clientId != null) {
+            clientDao.get(clientId) ?: throw NotAvailableException("El cliente ya no existe")
+        } else {
+            Client(id = newId(), name = newClientName.trim(), whatsapp = newClientPhone.trim()).also { cs.put(it) }
+        }
+
         val updated = item.copy(
             status = ItemStatus.SOLD,
             clientId = client.id,
@@ -175,10 +256,11 @@ class InventoryRepository(private val db: AppDatabase) {
             lastReminderAt = if (wasSold) item.lastReminderAt else null,
             updatedAt = System.currentTimeMillis(),
         )
-        itemDao.update(updated)
+        cs.put(updated, item)
         if (!wasSold) {
-            saleDao.insert(
+            cs.put(
                 Sale(
+                    id = newId(),
                     itemId = item.id,
                     clientId = client.id,
                     itemName = item.displayName(),
@@ -191,7 +273,8 @@ class InventoryRepository(private val db: AppDatabase) {
                 ),
             )
         }
-        updated to client
+        commit(cs)
+        return (itemDao.get(item.id) ?: updated) to client
     }
 
     /** Renueva: extiende el vencimiento del cliente y/o de la cuenta, y registra el cobro. */
@@ -202,19 +285,21 @@ class InventoryRepository(private val db: AppDatabase) {
         amount: Double,
         cost: Double,
         date: Long,
-    ) = db.withTransaction {
+    ) {
+        val cs = ChangeSet()
         val updated = item.copy(
             clientExpirationDate = if (item.status == ItemStatus.SOLD) newClientExpiration else item.clientExpirationDate,
             expirationDate = newAccountExpiration,
             lastReminderAt = null,
             updatedAt = System.currentTimeMillis(),
         )
-        itemDao.update(updated)
-        if (item.isAccount) syncProfiles(updated)
+        cs.put(updated, item)
+        if (item.isAccount) syncProfiles(cs, updated)
         if (amount > 0 || cost > 0) {
             val client = item.clientId?.let { clientDao.get(it) }
-            saleDao.insert(
+            cs.put(
                 Sale(
+                    id = newId(),
                     itemId = item.id,
                     clientId = client?.id,
                     itemName = item.displayName(),
@@ -227,64 +312,66 @@ class InventoryRepository(private val db: AppDatabase) {
                 ),
             )
         }
+        commit(cs)
     }
 
-    /** Devuelve el producto a disponible (el cliente dejó el servicio). */
-    suspend fun release(item: Item) = itemDao.update(
-        item.copy(
-            status = ItemStatus.AVAILABLE,
-            clientId = null,
-            saleDate = null,
-            salePrice = 0.0,
-            clientExpirationDate = null,
-            paid = true,
-            lastReminderAt = null,
-            updatedAt = System.currentTimeMillis(),
-        ),
+    private fun Item.released() = copy(
+        status = ItemStatus.AVAILABLE,
+        clientId = null,
+        saleDate = null,
+        salePrice = 0.0,
+        clientExpirationDate = null,
+        paid = true,
+        lastReminderAt = null,
+        updatedAt = System.currentTimeMillis(),
     )
 
+    /** Devuelve el producto a disponible (el cliente dejó el servicio). */
+    suspend fun release(item: Item) = commit(ChangeSet().apply { put(item.released(), item) })
+
     suspend fun setInactive(item: Item, inactive: Boolean) {
-        if (inactive) {
-            itemDao.update(
-                item.copy(
-                    status = ItemStatus.INACTIVE,
-                    clientId = null,
-                    clientExpirationDate = null,
-                    updatedAt = System.currentTimeMillis(),
-                ),
-            )
+        val updated = if (inactive) {
+            item.copy(status = ItemStatus.INACTIVE, clientId = null, clientExpirationDate = null, updatedAt = System.currentTimeMillis())
         } else {
-            itemDao.update(item.copy(status = ItemStatus.AVAILABLE, updatedAt = System.currentTimeMillis()))
+            item.copy(status = ItemStatus.AVAILABLE, updatedAt = System.currentTimeMillis())
         }
+        commit(ChangeSet().apply { put(updated, item) })
     }
 
     suspend fun markReminded(item: Item) =
-        itemDao.update(item.copy(lastReminderAt = System.currentTimeMillis()))
+        commit(ChangeSet().apply { put(item.copy(lastReminderAt = System.currentTimeMillis()), item) })
 
     suspend fun setPaid(item: Item, paid: Boolean) =
-        itemDao.update(item.copy(paid = paid, updatedAt = System.currentTimeMillis()))
+        commit(ChangeSet().apply { put(item.copy(paid = paid, updatedAt = System.currentTimeMillis()), item) })
 
-    /** Elimina el producto; si es una cuenta completa, también sus perfiles. */
-    suspend fun deleteItem(item: Item) = db.withTransaction {
+    /** Elimina el producto; si es una cuenta completa, también sus perfiles. El historial se conserva. */
+    suspend fun deleteItem(item: Item) {
+        val cs = ChangeSet()
         val toDelete = if (item.isAccount) itemDao.profilesOf(item.id) + item else listOf(item)
-        toDelete.forEach {
-            saleDao.detachItem(it.id)
-            itemDao.delete(it)
-        }
+        val ids = toDelete.map { it.id }.toSet()
+        toDelete.forEach { cs.delete(it) }
+        saleDao.getAll().filter { it.itemId in ids }.forEach { cs.put(it.copy(itemId = null)) }
+        commit(cs)
     }
 
-    suspend fun saveClient(client: Client): Long =
-        if (client.id == 0L) clientDao.insert(client) else client.id.also { clientDao.update(client) }
+    // ------------------------------------------------------------ clientes
+
+    suspend fun saveClient(client: Client): Long {
+        val c = if (client.id == 0L) client.copy(id = newId()) else client
+        commit(ChangeSet().apply { put(c) })
+        return c.id
+    }
 
     /** Elimina el cliente y libera los productos que tenía asignados. */
-    suspend fun deleteClient(client: Client) = db.withTransaction {
-        itemDao.getAll().filter { it.clientId == client.id }.forEach { release(it) }
-        saleDao.detachClient(client.id)
-        clientDao.delete(client)
+    suspend fun deleteClient(client: Client) {
+        val cs = ChangeSet()
+        itemDao.getAll().filter { it.clientId == client.id }.forEach { cs.put(it.released(), it) }
+        saleDao.getAll().filter { it.clientId == client.id }.forEach { cs.put(it.copy(clientId = null)) }
+        cs.deleteClients += client.id
+        commit(cs)
     }
 
-    suspend fun deleteSale(sale: Sale) = saleDao.delete(sale)
-
+    /** Restaurar respaldo (solo en modo teléfono). */
     suspend fun replaceAll(items: List<Item>, clients: List<Client>, sales: List<Sale>) = db.withTransaction {
         saleDao.clear()
         itemDao.clear()

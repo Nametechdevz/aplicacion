@@ -46,6 +46,11 @@ private val Dark = darkColorScheme(
 )
 
 @Composable
-fun InventarioTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+fun InventarioTheme(themeMode: String = "SYSTEM", content: @Composable () -> Unit) {
+    val dark = when (themeMode) {
+        "DARK" -> true
+        "LIGHT" -> false
+        else -> isSystemInDarkTheme()
+    }
+    MaterialTheme(colorScheme = if (dark) Dark else Light, content = content)
 }

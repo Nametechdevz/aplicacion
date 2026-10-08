@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
@@ -37,7 +39,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            InventarioTheme {
+            val settings by vm.settings.collectAsState()
+            InventarioTheme(themeMode = settings.themeMode) {
                 AppRoot(vm = vm, openRequest = openRequest)
             }
         }
@@ -58,10 +61,12 @@ class MainActivity : ComponentActivity() {
         // Bloquear de nuevo si la app estuvo más de 2 minutos en segundo plano.
         if (backgroundSince > 0 && System.currentTimeMillis() - backgroundSince > 2 * 60_000) vm.lockIfNeeded()
         backgroundSince = 0
+        vm.startSync()
     }
 
     override fun onStop() {
         super.onStop()
         backgroundSince = System.currentTimeMillis()
+        vm.stopSync()
     }
 }

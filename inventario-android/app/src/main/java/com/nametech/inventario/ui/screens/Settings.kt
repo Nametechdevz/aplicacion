@@ -16,7 +16,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -50,6 +52,7 @@ import com.nametech.inventario.BuildConfig
 import com.nametech.inventario.data.AppSettings
 import com.nametech.inventario.data.Templates
 import com.nametech.inventario.ui.AppViewModel
+import com.nametech.inventario.ui.Nav
 import com.nametech.inventario.ui.components.ConfirmDialog
 import com.nametech.inventario.ui.components.ScreenScaffold
 import com.nametech.inventario.ui.components.SectionCard
@@ -59,12 +62,14 @@ import com.nametech.inventario.ui.components.SpacerW
 import java.time.LocalDate
 
 @Composable
-fun SettingsScreen(vm: AppViewModel) {
+fun SettingsScreen(vm: AppViewModel, nav: Nav) {
     val s by vm.settings.collectAsState()
     val context = LocalContext.current
     val toast: (String) -> Unit = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     var confirmRestore by remember { mutableStateOf(false) }
     var pinDialog by remember { mutableStateOf(false) }
+    var passwordDialog by remember { mutableStateOf(false) }
+    var confirmLogout by remember { mutableStateOf(false) }
     val stamp = LocalDate.now().toString()
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -92,7 +97,40 @@ fun SettingsScreen(vm: AppViewModel) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionCard("Negocio") {
+            SectionCard("Mi cuenta") {
+                if (s.isCloud) {
+                    AccountCardContent(vm, nav, onChangePassword = { passwordDialog = true }, onLogout = { confirmLogout = true })
+                } else {
+                    Text("Está usando la app solo en este teléfono.", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Conéctese con su usuario para guardar su inventario en la nube y abrirlo desde varios dispositivos. Podrá subir los datos que ya tiene.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SpacerH(8)
+                    Button(onClick = { vm.wantCloudMode() }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Filled.Cloud, null); SpacerW(6); Text("Conectarme con mi cuenta")
+                    }
+                }
+            }
+
+            SectionCard("Apariencia") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("SYSTEM" to "Automático", "LIGHT" to "Claro", "DARK" to "Oscuro").forEach { (k, label) ->
+                        FilterChip(selected = s.themeMode == k, onClick = { update { it.copy(themeMode = k) } }, label = { Text(label) })
+                    }
+                }
+            }
+
+            SectionCard(if (s.isCloud) "Mi negocio (marca)" else "Negocio") {
+                if (s.isCloud) {
+                    Text(
+                        "Su marca, moneda y plantillas se guardan en su cuenta y se usan en todos sus dispositivos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SpacerH(8)
+                }
                 SimpleField("Nombre del negocio", s.businessName, { v -> update { it.copy(businessName = v) } })
                 SpacerH(8)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -212,14 +250,29 @@ fun SettingsScreen(vm: AppViewModel) {
                 Button(onClick = { backupLauncher.launch("inventario-respaldo-$stamp.json") }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.FileDownload, null); SpacerW(6); Text("Crear respaldo")
                 }
-                OutlinedButton(onClick = { confirmRestore = true }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.FileUpload, null); SpacerW(6); Text("Restaurar respaldo")
+                if (!s.isCloud) {
+                    OutlinedButton(onClick = { confirmRestore = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Filled.FileUpload, null); SpacerW(6); Text("Restaurar respaldo")
+                    }
                 }
                 OutlinedButton(onClick = { itemsCsvLauncher.launch("inventario-$stamp.csv") }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.TableChart, null); SpacerW(6); Text("Exportar inventario (Excel/CSV)")
                 }
                 OutlinedButton(onClick = { salesCsvLauncher.launch("ventas-$stamp.csv") }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.TableChart, null); SpacerW(6); Text("Exportar ventas (Excel/CSV)")
+                }
+            }
+
+            SectionCard("Actualizaciones") {
+                Text("Versión instalada: ${BuildConfig.VERSION_NAME}")
+                Text(
+                    "Cuando se publique una versión nueva le aparecerá un aviso para instalarla sin perder sus datos.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SpacerH(8)
+                OutlinedButton(onClick = { vm.checkForUpdate(manual = true) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.SystemUpdate, null); SpacerW(6); Text("Buscar actualizaciones")
                 }
             }
 
@@ -241,6 +294,16 @@ fun SettingsScreen(vm: AppViewModel) {
             confirm = "Elegir archivo",
             onConfirm = { restoreLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
             onDismiss = { confirmRestore = false },
+        )
+    }
+    if (passwordDialog) ChangePasswordDialog(vm) { passwordDialog = false }
+    if (confirmLogout) {
+        ConfirmDialog(
+            "Cerrar sesión",
+            "Sus datos siguen guardados en su cuenta. Al volver a entrar se descargan de nuevo. ¿Cerrar sesión?",
+            confirm = "Cerrar sesión",
+            onConfirm = { vm.logout() },
+            onDismiss = { confirmLogout = false },
         )
     }
     if (pinDialog) {

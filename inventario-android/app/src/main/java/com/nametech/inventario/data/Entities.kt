@@ -60,6 +60,8 @@ data class Item(
     val kind: String = ItemKind.SINGLE,
     /** Para un perfil: id de la cuenta completa a la que pertenece. */
     val parentId: Long? = null,
+    /** Revisión en el servidor (0 = solo en el teléfono). */
+    val rev: Long = 0,
 )
 
 val Item.isAccount: Boolean get() = kind == ItemKind.ACCOUNT
@@ -73,6 +75,7 @@ data class Client(
     val email: String = "",
     val notes: String = "",
     val createdAt: Long = System.currentTimeMillis(),
+    val rev: Long = 0,
 )
 
 /** Registro histórico de ventas y renovaciones (para reportes de ingresos y ganancias). */
@@ -89,4 +92,13 @@ data class Sale(
     val date: Long = 0,
     val kind: String = SaleKind.SALE,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Usuario que registró la venta (modo servidor). */
+    val createdBy: String = "",
+    val rev: Long = 0,
 )
+
+/**
+ * Ids generados en el teléfono (milisegundos * 1000 + aleatorio): así varios usuarios pueden crear
+ * registros sin chocar y el servidor los acepta tal cual.
+ */
+fun newId(): Long = System.currentTimeMillis() * 1000 + kotlin.random.Random.nextInt(1000)

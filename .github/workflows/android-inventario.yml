@@ -5,11 +5,13 @@ on:
     branches: ['**']
     paths:
       - 'inventario-android/**'
+      - 'inventario-server/**'
       - '.github/workflows/android-inventario.yml'
     tags: ['inventario-v*']
   pull_request:
     paths:
       - 'inventario-android/**'
+      - 'inventario-server/**'
       - '.github/workflows/android-inventario.yml'
   workflow_dispatch:
     inputs:
@@ -40,13 +42,34 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease
       - name: Versión
         id: ver
-        run: echo "version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+          echo "code=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
       - name: Renombrar APK
         run: cp app/build/outputs/apk/release/app-release.apk "InventarioPro-${{ steps.ver.outputs.version }}.apk"
+      - name: Revisar sintaxis PHP del servidor
+        working-directory: inventario-server
+        run: for f in *.php; do php -l "$f"; done
+      - name: Armar ZIP para el hosting (servidor + panel + APK)
+        env:
+          VNAME: ${{ steps.ver.outputs.version }}
+          VCODE: ${{ steps.ver.outputs.code }}
+        run: |
+          rm -rf ../hosting && mkdir -p ../hosting/updates
+          cp ../inventario-server/*.php ../inventario-server/README.md ../hosting/
+          cp ../inventario-server/updates/.htaccess ../hosting/updates/
+          cp "InventarioPro-$VNAME.apk" ../hosting/updates/
+          python3 -c "import json,os; print(json.dumps({'versionCode': int(os.environ['VCODE']), 'versionName': os.environ['VNAME'], 'file': 'InventarioPro-' + os.environ['VNAME'] + '.apk', 'notes': open('release-notes.txt', encoding='utf-8').read().strip()}, ensure_ascii=False, indent=2))" > ../hosting/updates/release.json
+          cat ../hosting/updates/release.json
+          (cd ../hosting && zip -r "../inventario-android/InventarioPro-hosting-$VNAME.zip" .)
       - uses: actions/upload-artifact@v4
         with:
           name: InventarioPro-APK
           path: inventario-android/InventarioPro-*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: InventarioPro-hosting-ZIP
+          path: inventario-android/InventarioPro-hosting-*.zip
       - name: Publicar release (tag inventario-v* o ejecución manual)
         if: startsWith(github.ref, 'refs/tags/inventario-v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         uses: softprops/action-gh-release@v2
@@ -58,4 +81,6 @@ jobs:
           body: |
             App Android de gestión de inventario para ventas de cuentas streaming, cursos, sistemas web y aplicaciones.
             Descargue `InventarioPro-*.apk` en el teléfono e instálelo (active "Instalar apps desconocidas" si Android lo pide).
-          files: inventario-android/InventarioPro-*.apk
+          files: |
+            inventario-android/InventarioPro-*.apk
+            inventario-android/InventarioPro-hosting-*.zip
