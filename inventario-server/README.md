@@ -8,7 +8,10 @@ Servidor para la app Android **Inventario Pro**. Se instala en cualquier hosting
 - **Administrador**: crea los usuarios, les pone fecha de vencimiento del acceso (+1 mes con un
   clic), los activa o desactiva, ve la actividad y publica actualizaciones de la app.
 - **Panel web** (`panel.php`): resumen, inventario, clientes, ventas con gráfica, actividad y
-  cambio de contraseña.
+  cambio de contraseña. Desde el panel también se **crean y editan productos** (incluidas cuentas
+  con perfiles), se **vende** (cuenta completa o un perfil), se renueva, se libera, se marca como
+  pagado, se eliminan productos, se gestionan clientes y se envían los datos o recordatorios por
+  WhatsApp. Todo se sincroniza con la app.
 
 ## Instalación (una sola vez)
 
@@ -39,6 +42,7 @@ perder datos. También se puede publicar una versión desde el panel → *Actual
 |---|---|
 | `install.php` | Instalador (elimínelo después de instalar) |
 | `panel.php` | Panel web |
+| `panel_items.php` | Gestión de inventario, ventas y clientes del panel |
 | `api.php` | API que usa la app |
 | `lib.php` | Funciones comunes (base de datos, sesiones) |
 | `config.php` | Lo crea el instalador (datos de la base de datos). **No lo comparta** |

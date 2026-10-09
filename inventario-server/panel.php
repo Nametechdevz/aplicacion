@@ -11,6 +11,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
     exit;
 }
 require __DIR__ . '/config.php';
+require __DIR__ . '/panel_items.php';
 date_default_timezone_set(defined('TIMEZONE') ? TIMEZONE : 'America/Bogota');
 
 $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
@@ -196,6 +197,7 @@ $settings = user_settings($uid);
 if (!is_array($settings)) $settings = array();
 $brand = !empty($settings['businessName']) ? $settings['businessName'] : 'Inventario Pro';
 $dueSoon = isset($settings['dueSoonDays']) ? (int) $settings['dueSoonDays'] : 3;
+$today = today_epoch();
 
 // ---------------------------------------------------------------- acciones
 
@@ -213,6 +215,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('Contraseña actualizada. Inicie sesión de nuevo en la app.');
             redirect('account');
         }
+        // Inventario, ventas y clientes (cada usuario, el suyo).
+        handle_item_action($action);
         if (!$isAdmin) throw new ApiError('Solo el administrador puede hacer esto.');
 
         if ($action === 'user_save') {
@@ -292,13 +296,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         throw new ApiError('Acción desconocida.');
     } catch (ApiError $e) {
         flash($e->getMessage(), 'err');
-        redirect($page, isset($_POST['id']) && $page === 'users' ? '&edit=' . (int) post('id') : '');
+        // Volver al mismo formulario para corregir.
+        header('Location: ' . $_SERVER['REQUEST_URI']);
+        exit;
     }
 }
 
 // ---------------------------------------------------------------- datos para las páginas
-
-$today = today_epoch();
 
 $nav = array(
     'home' => array('Inicio', 'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10'),
@@ -312,11 +316,27 @@ if ($isAdmin) {
 }
 $nav['activity'] = array('Actividad', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z');
 $nav['account'] = array('Mi cuenta', 'M15 7a3 3 0 11-6 0 3 3 0 016 0zM5 21v-2a4 4 0 014-4h6a4 4 0 014 4v2');
-if (!isset($nav[$page])) $page = 'home';
+// Páginas internas (no aparecen en el menú): título y opción del menú que se resalta.
+$inner = array(
+    'item' => array('Producto', 'inventory'), 'item_edit' => array('Producto', 'inventory'),
+    'sell' => array('Vender', 'inventory'), 'renew' => array('Renovar', 'inventory'),
+    'client' => array('Cliente', 'clients'), 'client_edit' => array('Cliente', 'clients'),
+);
+if (!isset($nav[$page]) && !isset($inner[$page])) $page = 'home';
+$title = isset($inner[$page]) ? $inner[$page][0] : $nav[$page][0];
+$navActive = isset($inner[$page]) ? $inner[$page][1] : $page;
+if ($page === 'item_edit' && empty($_GET['id'])) $title = 'Nuevo producto';
+if ($page === 'client_edit' && empty($_GET['id'])) $title = 'Nuevo cliente';
 
 ob_start();
 switch ($page) {
     case 'inventory': page_inventory(); break;
+    case 'item': page_item(); break;
+    case 'item_edit': page_item_edit(); break;
+    case 'sell': page_sell(); break;
+    case 'renew': page_renew(); break;
+    case 'client': page_client(); break;
+    case 'client_edit': page_client_edit(); break;
     case 'clients': page_clients(); break;
     case 'sales': page_sales(); break;
     case 'users': page_users(); break;
@@ -326,7 +346,7 @@ switch ($page) {
     default: page_home();
 }
 $content = ob_get_clean();
-render_layout($nav[$page][0], $content);
+render_layout($title, $content);
 
 // ================================================================ páginas
 
@@ -459,7 +479,7 @@ function page_inventory()
     $q = trim(isset($_GET['q']) ? (string) $_GET['q'] : '');
     $filters = array('all' => 'Todas', 'available' => 'Disponibles', 'sold' => 'Vendidas', 'soon' => 'Por vencer', 'expired' => 'Vencidas', 'unpaid' => 'Por cobrar', 'inactive' => 'Inactivas');
     echo '<form class="toolbar" method="get"><input type="hidden" name="p" value="inventory"><input type="hidden" name="f" value="' . h($f) . '">';
-    echo '<input class="search" name="q" value="' . h($q) . '" placeholder="Buscar servicio, correo o cliente…"></form>';
+    echo '<input class="search" name="q" value="' . h($q) . '" placeholder="Buscar servicio, correo o cliente…" style="flex:1"><a class="btn" href="panel.php?p=item_edit">+ Nuevo producto</a></form>';
     echo '<div class="chips">';
     foreach ($filters as $k => $label) {
         $n = count(array_filter($items, function ($i) use ($k) { return matches_filter($i, $k); }));
@@ -478,7 +498,7 @@ function page_inventory()
         return $x <=> $y;
     });
     if (!$rows) {
-        echo '<div class="empty">No hay productos con este filtro. Los productos se agregan desde la app.</div>';
+        echo '<div class="empty">No hay productos con este filtro. <a href="panel.php?p=item_edit">Agregar producto</a></div>';
         return;
     }
     echo '<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Acceso</th><th>Estado</th><th>Cliente</th><th>Vence</th><th class="r">Precio</th></tr></thead><tbody>';
@@ -493,7 +513,7 @@ function page_inventory()
         $sub = category_label($i['category']);
         if ($i['_free'] !== null) $sub .= " · {$i['_free'][0]}/{$i['_free'][1]} perfiles libres";
         $tone = $st['time'] === 'expired' ? 't-red' : ($st['time'] === 'soon' ? 't-amber' : '');
-        echo '<tr><td><b>' . h(display_name($i)) . '</b><small>' . h($sub) . '</small></td>';
+        echo '<tr class="click" data-href="panel.php?p=item&id=' . $i['id'] . '"><td><a href="panel.php?p=item&id=' . $i['id'] . '"><b>' . h(display_name($i)) . '</b></a><small>' . h($sub) . '</small></td>';
         echo '<td>' . h($i['accessUser']) . ($i['profilePin'] !== '' ? '<small>' . h($i['profilePin']) . '</small>' : '') . '</td>';
         echo "<td>$status</td>";
         echo '<td>' . ($client ? h($client['name']) . '<small>' . h($client['whatsapp']) . '</small>' : '<span class="muted">—</span>') . '</td>';
@@ -510,8 +530,9 @@ function page_clients()
     $items = load_rows('items', $uid);
     $sales = load_rows('sales', $uid);
     usort($clients, function ($a, $b) { return strcasecmp($a['name'], $b['name']); });
+    echo '<div class="toolbar"><p class="muted">Los clientes también se crean al vender.</p><a class="btn" href="panel.php?p=client_edit">+ Nuevo cliente</a></div>';
     if (!$clients) {
-        echo '<div class="empty">Aún no tiene clientes. Se crean al vender desde la app.</div>';
+        echo '<div class="empty">Aún no tiene clientes.</div>';
         return;
     }
     echo '<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>WhatsApp</th><th class="r">Servicios activos</th><th class="r">Total comprado</th></tr></thead><tbody>';
@@ -519,7 +540,7 @@ function page_clients()
         $active = count(array_filter($items, function ($i) use ($c) { return $i['clientId'] === $c['id'] && $i['status'] === 'SOLD'; }));
         $total = array_sum(array_map(function ($s) { return $s['amount']; }, array_filter($sales, function ($s) use ($c) { return $s['clientId'] === $c['id']; })));
         $wa = preg_replace('/\D/', '', $c['whatsapp']);
-        echo '<tr><td><b>' . h($c['name']) . '</b>' . ($c['email'] ? '<small>' . h($c['email']) . '</small>' : '') . '</td>';
+        echo '<tr class="click" data-href="panel.php?p=client&id=' . $c['id'] . '"><td><a href="panel.php?p=client&id=' . $c['id'] . '"><b>' . h($c['name']) . '</b></a>' . ($c['email'] ? '<small>' . h($c['email']) . '</small>' : '') . '</td>';
         echo '<td>' . ($wa ? '<a class="wa" target="_blank" rel="noopener" href="https://wa.me/' . h($wa) . '">' . h($c['whatsapp']) . '</a>' : '<span class="muted">—</span>') . '</td>';
         echo "<td class=\"r\">$active</td><td class=\"r\">" . h(money($total, $settings)) . '</td></tr>';
     }
@@ -753,19 +774,19 @@ function render_login($error)
 
 function render_layout($title, $content)
 {
-    global $nav, $page, $user, $brand, $isAdmin;
+    global $nav, $navActive, $user, $brand, $isAdmin;
     $flash = isset($_SESSION['flash']) ? $_SESSION['flash'] : null;
     unset($_SESSION['flash']);
     ?><!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= h($title) ?> · <?= h($brand) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style><?= styles() ?></style></head>
+<style><?= styles() ?></style><?= items_assets() ?></head>
 <body><div class="app">
 <aside class="side" id="side">
   <div class="brand"><div class="logo">📦</div><div><b><?= h($brand) ?></b><small>Inventario Pro</small></div></div>
   <nav><?php foreach ($nav as $k => $n): ?>
-    <a class="<?= $k === $page ? 'on' : '' ?>" href="panel.php?p=<?= $k ?>"><svg viewBox="0 0 24 24"><path d="<?= $n[1] ?>"/></svg><?= h($n[0]) ?></a>
+    <a class="<?= $k === $navActive ? 'on' : '' ?>" href="panel.php?p=<?= $k ?>"><svg viewBox="0 0 24 24"><path d="<?= $n[1] ?>"/></svg><?= h($n[0]) ?></a>
   <?php endforeach; ?></nav>
   <div class="foot"><b><?= h($user['name']) ?></b><br><?= $isAdmin ? 'Administrador' : 'Revendedor' ?> · <a href="panel.php?p=logout">Salir</a></div>
 </aside>
