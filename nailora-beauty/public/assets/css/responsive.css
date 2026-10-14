@@ -1,0 +1,88 @@
+/* ==========================================================================
+   Nailora Beauty — Adaptaciones por tamaño de pantalla (tienda)
+   Base: móvil 360 px. Puntos de quiebre: 480, 768, 1024, 1280.
+   ========================================================================== */
+
+@media (max-width: 379px) {
+  :root { --gutter: .85rem; }
+  .logo-word { font-size: 1.25rem !important; }
+  .site-logo .brand-mark { width: 28px; height: 28px; }
+  .product-grid { gap: var(--space-3) var(--space-2); }
+  .product-card__body { padding: var(--space-2) var(--space-2) var(--space-1); }
+  .product-card__actions { padding: 0 var(--space-2) var(--space-2); }
+  .product-card .btn--sm { padding-inline: .5rem; font-size: .8rem; }
+  .buy-box__row { grid-template-columns: 1fr; }
+  .qty { justify-self: start; }
+}
+
+@media (min-width: 480px) {
+  .category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cart-item { grid-template-columns: 96px 1fr; }
+}
+
+@media (min-width: 768px) {
+  :root { --gutter: 1.5rem; }
+  .hide-sm { display: inline-flex; }
+  .site-header__menu { display: none; }
+  .site-header__inner { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-5); min-height: 74px; }
+  .site-logo { justify-self: start; }
+  .site-search { display: block; max-width: 460px; width: 100%; justify-self: center; }
+  .site-search--drawer { display: block; }
+  .site-nav { display: block; }
+
+  .hero__inner { grid-template-columns: 1.05fr 1fr; align-items: center; padding-block: var(--space-7); }
+  .hero__actions .btn { flex: 0 0 auto; }
+  .hero__media { margin: 0; }
+  .hero__media img { border-radius: var(--radius-lg); max-height: none; }
+
+  .section { padding-block: var(--space-8); }
+  .category-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+  .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
+  .product-card__title { font-size: var(--fs-base); }
+  .benefits { grid-template-columns: repeat(3, 1fr); }
+  .shipping-band { grid-template-columns: 1fr 1fr; align-items: center; }
+  .cta-band { grid-template-columns: 1fr auto; align-items: center; padding: var(--space-7); }
+
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .field--full { grid-column: 1 / -1; }
+  .radio-cards { grid-template-columns: 1fr 1fr; }
+
+  .product-detail { grid-template-columns: 1fr 1fr; gap: var(--space-7); align-items: start; }
+  .gallery { position: sticky; top: 140px; }
+  .gallery__thumb { width: 84px; height: 84px; }
+
+  .cart-item { grid-template-columns: 110px 1fr auto; align-items: center; }
+  .cart-item__controls { grid-column: auto; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+  .confirmation__grid { grid-template-columns: 1.3fr 1fr; }
+  .site-footer__grid { grid-template-columns: 1.4fr 1fr 1fr 1.2fr; }
+  .info-page { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+  .info-page:not(:has(.contact-card)) { grid-template-columns: minmax(0, 1fr); }
+
+  .wa-float { right: 24px; bottom: 24px; }
+}
+
+@media (min-width: 1024px) {
+  .category-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .product-grid--catalog { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  .catalog { grid-template-columns: 260px minmax(0, 1fr); align-items: start; gap: var(--space-6); }
+  .catalog__filters { position: sticky; top: 140px; }
+  .filters__toggle { pointer-events: none; }
+  .filters__toggle .filters__chevron { display: none; }
+
+  .cart { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; gap: var(--space-7); }
+  .cart__summary { position: sticky; top: 140px; }
+  .checkout { grid-template-columns: minmax(0, 1fr) 400px; align-items: start; gap: var(--space-7); }
+  .checkout__form { padding: var(--space-6); }
+  .checkout__summary { position: sticky; top: 140px; }
+}
+
+@media (min-width: 1280px) {
+  .product-grid--catalog { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* En escritorio el filtro siempre está desplegado; en móvil se pliega con <details> */
+@media (max-width: 1023px) {
+  .filters:not([open]) .filters__form { display: none; }
+}

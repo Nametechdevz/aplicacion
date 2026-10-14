@@ -1,0 +1,21 @@
+# Nailora Beauty — usado SOLO cuando el document root apunta a la raíz del proyecto
+# (hosting compartido que no permite elegir public/). Redirige todo a public/
+# y bloquea el acceso directo a archivos internos.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Bloquear archivos y carpetas internas
+    RewriteRule ^(app|config|database|routes|storage|bin|tests|vendor)(/|$) - [F,L]
+    RewriteRule (^|/)\.(?!well-known) - [F,L]
+    RewriteRule \.(env|sql|md|lock|json|log|ini|sh|dist)$ - [F,L]
+
+    # Todo lo demás se sirve desde public/
+    RewriteCond %{REQUEST_URI} !/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

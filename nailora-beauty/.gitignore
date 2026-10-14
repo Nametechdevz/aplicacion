@@ -1,0 +1,16 @@
+.env
+/vendor/
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/sessions/*
+!/storage/sessions/.gitkeep
+/storage/installed.lock
+/public/uploads/products/*
+!/public/uploads/products/.gitkeep
+/public/uploads/categories/*
+!/public/uploads/categories/.gitkeep
+/public/uploads/settings/*
+!/public/uploads/settings/.gitkeep
+.DS_Store
