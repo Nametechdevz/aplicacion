@@ -252,13 +252,6 @@ body.no-scroll { overflow: hidden; }
 
 .summary-card { background: #fff; border: 1px solid var(--c-border); border-radius: var(--radius-lg); padding: var(--space-5); display: grid; gap: var(--space-3); align-self: start; }
 .summary-card__title { font-family: var(--font-display); font-size: var(--fs-lg); margin: 0; }
-.totals { margin: 0; display: grid; gap: var(--space-2); }
-.totals > div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--fs-sm); }
-.totals dt { color: var(--c-text-soft); }
-.totals dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
-.totals__discount dd { color: var(--c-fuchsia); }
-.totals__total { border-top: 1px solid var(--c-border); padding-top: var(--space-3); margin-top: var(--space-1); }
-.totals__total dt, .totals__total dd { font-size: var(--fs-md); color: var(--c-text); font-weight: 700; }
 
 .mini-lines { list-style: none; display: grid; gap: var(--space-3); }
 .mini-lines li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; font-size: var(--fs-sm); }
@@ -296,10 +289,6 @@ body.no-scroll { overflow: hidden; }
 .status-steps .is-done > span { background: var(--c-success); border-color: var(--c-success); color: #fff; }
 .status-steps .is-current { color: var(--c-wine); font-weight: 600; }
 .status-steps .is-current > span { border-color: var(--c-wine); color: var(--c-wine); }
-.data-list { margin: 0 0 var(--space-4); display: grid; gap: var(--space-3); }
-.data-list > div { display: grid; gap: .1rem; }
-.data-list dt { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--c-text-muted); }
-.data-list dd { margin: 0; overflow-wrap: anywhere; }
 
 /* ---------- Páginas informativas ---------- */
 .info-page { display: grid; gap: var(--space-5); padding-bottom: var(--space-7); }
@@ -332,3 +321,4 @@ body.no-scroll { overflow: hidden; }
   transition: transform var(--t-fast);
 }
 .wa-float:hover { color: #fff; transform: scale(1.06); }
+.product-detail > *, .cart > *, .checkout > *, .catalog > *, .confirmation__grid > * { min-width: 0; }

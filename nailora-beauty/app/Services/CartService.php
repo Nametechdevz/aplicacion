@@ -119,6 +119,9 @@ final class CartService
             }
             $available = (int) $variant['stock'];
         } else {
+            if ($variantId !== null) {
+                throw new DomainException('La opción seleccionada no pertenece a este producto.');
+            }
             $available = (int) $product['stock'];
         }
         return [$product, $variant, $available];

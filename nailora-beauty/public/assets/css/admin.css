@@ -6,7 +6,7 @@
 .admin-sidebar {
   position: fixed; inset: 0 auto 0 0; z-index: 400; width: var(--sidebar-w); background: #fff; border-right: 1px solid var(--c-border);
   display: flex; flex-direction: column; padding: var(--space-4) var(--space-3); overflow-y: auto;
-  transform: translateX(-100%); transition: transform var(--t) var(--ease), width var(--t) var(--ease);
+  transform: translateX(-100%); transition: transform var(--t) var(--ease);
 }
 .admin-sidebar.is-open { transform: none; box-shadow: var(--shadow-lg); }
 .admin-sidebar__head { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-2) var(--space-4); }
@@ -250,7 +250,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 @media (min-width: 1024px) {
   .admin-sidebar { transform: none; box-shadow: none; }
   .admin-sidebar__close { display: none; }
-  .admin-main { margin-left: var(--sidebar-w); transition: margin var(--t) var(--ease); }
+  .admin-main { margin-left: var(--sidebar-w); }
   .admin-backdrop { display: none; }
   .admin.sidebar-collapsed { --sidebar-w: 76px; }
   .sidebar-collapsed .admin-nav__label, .sidebar-collapsed .admin-nav__group, .sidebar-collapsed .logo-text, .sidebar-collapsed .admin-nav__badge { display: none; }
