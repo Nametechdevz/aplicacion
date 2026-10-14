@@ -32,6 +32,13 @@ jobs:
 
       - name: Configurar el SDK de Android
         uses: android-actions/setup-android@v3
+        with:
+          # Evita que la acción instale el paquete obsoleto "tools".
+          packages: "platform-tools"
+
+      - name: Instalar componentes del SDK
+        run: |
+          yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" >/dev/null
 
       - name: Instalar Gradle 8.9
         run: |
