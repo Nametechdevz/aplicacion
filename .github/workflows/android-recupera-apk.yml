@@ -1,0 +1,51 @@
+name: Compilar APK Recupera Mensajes
+
+# Compila el APK de la app Android de android-recupera/.
+# El APK de depuración queda firmado con la clave de debug, así que es
+# instalable directamente en el teléfono (activando "orígenes desconocidos").
+on:
+  push:
+    paths:
+      - "android-recupera/**"
+      - ".github/workflows/android-recupera-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-recupera
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configurar el SDK de Android
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Gradle 8.9
+        run: |
+          cd "$RUNNER_TEMP"
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle-8.9-bin.zip
+          echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
+
+      - name: Compilar el APK (debug)
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Subir el APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: recupera-mensajes-apk
+          path: android-recupera/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
