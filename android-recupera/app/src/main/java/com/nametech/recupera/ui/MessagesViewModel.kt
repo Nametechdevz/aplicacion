@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 
 class MessagesViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val dao = AppDatabase.get(app).messageDao()
+    private val db = AppDatabase.get(app)
+    private val dao = db.messageDao()
+    private val mediaDao = db.mediaDao()
 
     val allMessages = dao.all()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -22,8 +24,14 @@ class MessagesViewModel(app: Application) : AndroidViewModel(app) {
     val count = dao.count()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
-    fun clearAll() = viewModelScope.launch { dao.clearAll() }
+    val media = mediaDao.all()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun groupedByChat(messages: List<Message>): Map<String, List<Message>> =
-        messages.groupBy { it.chatKey }
+    val mediaCount = mediaDao.count()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    fun clearAll() = viewModelScope.launch {
+        dao.clearAll()
+        mediaDao.clearAll()
+    }
 }
