@@ -1,0 +1,49 @@
+NAILORA BEAUTY — INSTALACIÓN RÁPIDA EN HOSTING (cPanel)
+=======================================================
+(Guía completa: README.md, secciones 1 a 19)
+
+1. SUBIR ARCHIVOS
+   - Descomprima este ZIP en su hosting. Recomendado: fuera de public_html,
+     por ejemplo /home/SU_CUENTA/nailora-beauty
+   - Apunte el dominio a la carpeta  nailora-beauty/public
+     (cPanel > Dominios > Document Root).
+   - Si NO puede cambiar el document root: suba el CONTENIDO de la carpeta
+     nailora-beauty directamente a public_html. El .htaccess incluido protege
+     los archivos internos.
+
+2. BASE DE DATOS (cPanel > Bases de datos MySQL)
+   - Cree una base de datos y un usuario, y asígnele TODOS los privilegios.
+
+3. ARCHIVO .env
+   - Copie .env.example como .env (en la misma carpeta) y complete:
+       APP_URL=https://www.su-dominio.com      (sin barra al final)
+       DB_HOST=localhost
+       DB_DATABASE=cuenta_nombrebd
+       DB_USERNAME=cuenta_usuario
+       DB_PASSWORD=su_contraseña
+       INSTALL_TOKEN=escriba-aqui-una-clave-de-16-o-mas-caracteres
+   - Deje APP_DEBUG=false.
+
+4. PERMISOS
+   - storage/ y public/uploads/ deben poder escribirse (755 o 775). Nunca 777.
+
+5. INSTALAR
+   - Abra  https://www.su-dominio.com/instalar
+   - Escriba el INSTALL_TOKEN, cree su usuario administrador y, si quiere,
+     marque "Cargar datos de demostración".
+   - Al terminar, BORRE el valor de INSTALL_TOKEN en el archivo .env.
+   (Alternativa sin instalador: importe database/schema.sql y database/seed.sql
+    con phpMyAdmin y cree el administrador con: php bin/create-admin.php)
+
+6. CONFIGURAR LA TIENDA  (https://www.su-dominio.com/admin)
+   - Configuración > WhatsApp: número en formato 573001234567.
+   - Configuración: textos, envíos y métodos de pago.
+   - Páginas: revise las políticas y textos legales.
+   - Antes de vender: ejecute database/clear-demo.sql en phpMyAdmin para
+     retirar los productos de demostración (SKU DEMO-) y cree los suyos.
+
+7. HTTPS
+   - Active SSL (AutoSSL / Let's Encrypt) y use https:// en APP_URL.
+
+Requisitos: PHP 8.1+ (recomendado 8.2), MySQL 8 o MariaDB 10.5+,
+Apache con mod_rewrite. Extensiones: pdo_mysql, mbstring, fileinfo, gd.
