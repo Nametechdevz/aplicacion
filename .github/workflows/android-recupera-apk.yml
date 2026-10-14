@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -56,3 +56,21 @@ jobs:
           name: recupera-mensajes-apk
           path: android-recupera/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Copia el APK con un nombre limpio para la Release.
+      - name: Preparar APK para la Release
+        run: cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/recupera-mensajes.apk"
+
+      # Publica el APK como archivo suelto en una Release, para descargarlo
+      # directo como .apk desde el navegador del teléfono (sin .zip, sin login).
+      - name: Publicar APK en una Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: recupera-mensajes-latest
+          name: Recupera Mensajes (APK)
+          body: |
+            APK de la app **Recupera Mensajes** listo para instalar.
+            Descarga `recupera-mensajes.apk` y ábrelo en el teléfono
+            (activa "instalar apps de orígenes desconocidos").
+          files: ${{ runner.temp }}/recupera-mensajes.apk
+          make_latest: false
