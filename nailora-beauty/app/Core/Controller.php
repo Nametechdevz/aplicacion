@@ -23,6 +23,9 @@ abstract class Controller
     protected function securityHeaders(): void
     {
         header('X-Content-Type-Options: nosniff');
+        // Páginas con token CSRF y carrito: no deben guardarse en cachés compartidas (LiteSpeed, CDN)
+        header('Cache-Control: no-cache, no-store, private, must-revalidate');
+        header('X-LiteSpeed-Cache-Control: no-cache');
         header('X-Frame-Options: SAMEORIGIN');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Permissions-Policy: camera=(), microphone=(), geolocation=()');

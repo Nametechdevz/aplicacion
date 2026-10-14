@@ -146,8 +146,12 @@ final class Request
 
     public static function isHttps(): bool
     {
+        // Incluye hostings detrás de proxy/CDN (Hostinger, Cloudflare) que informan el protocolo por cabecera
         return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443
-            || str_starts_with((string) config('app.url'), 'https://');
+            || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
+            || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on'
+            || str_contains((string) ($_SERVER['HTTP_CF_VISITOR'] ?? ''), 'https')
+            || (PHP_SAPI === 'cli' && str_starts_with((string) config('app.url'), 'https://'));
     }
 }

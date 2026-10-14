@@ -16,7 +16,8 @@ NAILORA BEAUTY — INSTALACIÓN RÁPIDA EN HOSTING (cPanel)
 
 3. ARCHIVO .env
    - Copie .env.example como .env (en la misma carpeta) y complete:
-       APP_URL=https://www.su-dominio.com      (sin barra al final)
+       APP_URL=https://www.su-dominio.com      (sin barra al final; use la
+         misma dirección que escriben sus clientes, con https)
        DB_HOST=localhost
        DB_DATABASE=cuenta_nombrebd
        DB_USERNAME=cuenta_usuario

@@ -41,9 +41,36 @@ function e(mixed $value): string
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/**
+ * Base de las URLs: APP_URL, pero con el protocolo y el host por los que entra el
+ * visitante cuando es el mismo dominio (con o sin "www"). Evita errores si APP_URL
+ * se configuró con http/https o www distinto al real.
+ */
+function base_url(): string
+{
+    static $base = null;
+    if ($base !== null) {
+        return $base;
+    }
+    $configured = rtrim((string) config('app.url'), '/');
+    $base = $configured;
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    if (PHP_SAPI === 'cli' || $host === '' || !preg_match('/^[a-z0-9.\-]+(:\d+)?$/', $host)) {
+        return $base;
+    }
+    $parts = parse_url($configured) ?: [];
+    $configuredHost = strtolower(($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : ''));
+    $strip = static fn (string $h): string => preg_replace('/^www\./', '', $h) ?? $h;
+    if ($configuredHost !== '' && $strip($configuredHost) === $strip($host)) {
+        $scheme = App\Core\Request::isHttps() ? 'https' : 'http';
+        $base = $scheme . '://' . $host . rtrim((string) ($parts['path'] ?? ''), '/');
+    }
+    return $base;
+}
+
 function url(string $path = ''): string
 {
-    $base = (string) config('app.url');
+    $base = base_url();
     if ($path === '' || $path === '/') {
         return $base . '/';
     }
@@ -89,7 +116,7 @@ function redirect(string $path, int $status = 302): never
 function back(string $fallback = '/'): never
 {
     $referer = $_SERVER['HTTP_REFERER'] ?? '';
-    $base = (string) config('app.url');
+    $base = base_url();
     if ($referer !== '' && str_starts_with($referer, $base)) {
         header('Location: ' . $referer, true, 302);
         exit;
