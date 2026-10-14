@@ -39,6 +39,7 @@ enum class Filter(val label: String) {
     DUE_SOON("Por vencer"),
     EXPIRED("Vencidas"),
     UNPAID("Por cobrar"),
+    IN_STORE("En tienda"),
     INACTIVE("Inactivas"),
 }
 
@@ -82,6 +83,7 @@ fun Item.matches(filter: Filter, today: Long, dueSoonDays: Int): Boolean {
         Filter.DUE_SOON -> active && timeState(today, dueSoonDays) == TimeState.DUE_SOON
         Filter.EXPIRED -> active && timeState(today, dueSoonDays) == TimeState.EXPIRED
         Filter.UNPAID -> status == ItemStatus.SOLD && !paid
+        Filter.IN_STORE -> active && inStore
         Filter.INACTIVE -> status == ItemStatus.INACTIVE
     }
 }

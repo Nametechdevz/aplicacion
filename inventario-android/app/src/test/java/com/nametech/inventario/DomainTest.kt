@@ -48,6 +48,14 @@ class DomainTest {
     }
 
     @Test
+    fun filtroEnTienda() {
+        val published = Item(name = "Curso", inStore = true)
+        assertTrue(published.matches(Filter.IN_STORE, today, 3))
+        assertFalse(Item(name = "Curso").matches(Filter.IN_STORE, today, 3))
+        assertFalse(published.copy(status = ItemStatus.INACTIVE).matches(Filter.IN_STORE, today, 3))
+    }
+
+    @Test
     fun normalizaNumerosDeWhatsApp() {
         assertEquals("573001234567", WhatsApp.normalize("300 123 4567", "57"))
         assertEquals("573001234567", WhatsApp.normalize("+57 300-123-4567", "57"))

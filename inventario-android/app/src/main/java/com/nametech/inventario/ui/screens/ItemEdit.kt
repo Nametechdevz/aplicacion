@@ -35,6 +35,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -87,6 +88,8 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
     var purchase by rememberSaveable { mutableStateOf<Long?>(if (isNew) today() else null) }
     var expiration by rememberSaveable { mutableStateOf<Long?>(null) }
     var notes by rememberSaveable { mutableStateOf("") }
+    var inStore by rememberSaveable { mutableStateOf(false) }
+    var storeUrl by rememberSaveable { mutableStateOf("") }
     var copies by rememberSaveable { mutableStateOf("1") }
     var nameError by rememberSaveable { mutableStateOf(false) }
     var categoryMenu by rememberSaveable { mutableStateOf(false) }
@@ -104,6 +107,7 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
             password = it.accessPassword; profile = it.profilePin; url = it.accessUrl; extra = it.extraInfo
             supplier = it.supplier; cost = Fmt.plain(it.costPrice); price = Fmt.plain(it.suggestedPrice)
             purchase = it.purchaseDate; expiration = it.expirationDate; notes = it.notes; kind = it.kind
+            inStore = it.inStore; storeUrl = it.storeUrl
             loaded = true
         }
     }
@@ -131,6 +135,8 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
                 purchaseDate = purchase,
                 expirationDate = expiration,
                 notes = notes.trim(),
+                inStore = inStore,
+                storeUrl = storeUrl.trim(),
             )
             val ok = vm.safe {
                 if (isNew && withProfiles) {
@@ -270,6 +276,22 @@ fun ItemEditScreen(vm: AppViewModel, nav: Nav, id: Long) {
             }
 
             SimpleField("Notas", notes, { notes = it }, singleLine = false, minLines = 2)
+
+            SectionTitle("Tienda web")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("🛒 Publicado en mi tienda web")
+                    Text(
+                        "Para saber qué productos tiene a la venta en su tienda",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = inStore, onCheckedChange = { inStore = it })
+            }
+            if (inStore) {
+                SimpleField("Link del producto en la tienda (opcional)", storeUrl, { storeUrl = it }, keyboardType = KeyboardType.Uri, leading = Icons.Filled.Link)
+            }
 
             if (isNew && withProfiles) {
                 SectionTitle("Perfiles")

@@ -13,8 +13,8 @@ android {
         applicationId = "com.nametech.inventario"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.0.2"
+        versionCode = 6
+        versionName = "2.1.0"
         // Servidor fijo: la app siempre entra con usuario y contraseña a este dominio.
         buildConfigField("String", "SERVER_URL", "\"https://whatsflow.gdsmanager.com\"")
     }

@@ -1,2 +1,3 @@
-• Acceso solo con usuario y contraseña (el servidor ya viene configurado).
-• Corrige el error «The coroutine scope left the composition» al iniciar sesión o guardar.
+• Nuevo: marque qué productos están publicados en su tienda web (🛒 En tienda) y guarde el link.
+• Filtro «En tienda» en el inventario y conteo en el inicio.
+• Desde el panel web ahora también puede crear productos, vender, renovar y gestionar clientes.

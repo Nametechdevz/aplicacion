@@ -12,6 +12,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 }
 require __DIR__ . '/config.php';
 require __DIR__ . '/panel_items.php';
+ensure_schema();
 date_default_timezone_set(defined('TIMEZONE') ? TIMEZONE : 'America/Bogota');
 
 $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
@@ -394,6 +395,7 @@ function matches_filter($it, $f)
         case 'expired': return $active && $t === 'expired';
         case 'unpaid': return $it['status'] === 'SOLD' && !$it['paid'];
         case 'inactive': return $it['status'] === 'INACTIVE';
+        case 'store': return $active && !empty($it['inStore']);
         default: return $active;
     }
 }
@@ -425,6 +427,7 @@ function page_home()
     echo '<div><span>Ingresos</span><b class="t-blue">' . h(money($income, $settings)) . '</b></div>';
     echo '<div><span>Ganancia</span><b class="t-green">' . h(money($profit, $settings)) . '</b></div>';
     echo '<div><span>Por cobrar</span><b class="t-red">' . h(money(array_sum(array_map(function ($i) { return $i['salePrice']; }, $unpaid)), $settings)) . '</b></div>';
+    echo '<div><span>Publicados en la tienda</span><b><a href="panel.php?p=inventory&f=store">' . $count('store') . '</a></b></div>';
     echo '</div></section>';
 
     $upcoming = array_filter($items, function ($i) {
@@ -477,7 +480,7 @@ function page_inventory()
     foreach (load_rows('clients', $uid) as $c) $clients[$c['id']] = $c;
     $f = isset($_GET['f']) ? $_GET['f'] : 'all';
     $q = trim(isset($_GET['q']) ? (string) $_GET['q'] : '');
-    $filters = array('all' => 'Todas', 'available' => 'Disponibles', 'sold' => 'Vendidas', 'soon' => 'Por vencer', 'expired' => 'Vencidas', 'unpaid' => 'Por cobrar', 'inactive' => 'Inactivas');
+    $filters = array('all' => 'Todas', 'available' => 'Disponibles', 'sold' => 'Vendidas', 'soon' => 'Por vencer', 'expired' => 'Vencidas', 'unpaid' => 'Por cobrar', 'store' => '🛒 En tienda', 'inactive' => 'Inactivas');
     echo '<form class="toolbar" method="get"><input type="hidden" name="p" value="inventory"><input type="hidden" name="f" value="' . h($f) . '">';
     echo '<input class="search" name="q" value="' . h($q) . '" placeholder="Buscar servicio, correo o cliente…" style="flex:1"><a class="btn" href="panel.php?p=item_edit">+ Nuevo producto</a></form>';
     echo '<div class="chips">';
@@ -508,6 +511,7 @@ function page_inventory()
         if ($i['status'] !== 'INACTIVE' && $st['time'] === 'soon') $status .= ' <span class="pill amber">Por vencer</span>';
         if ($i['status'] !== 'INACTIVE' && $st['time'] === 'expired') $status .= ' <span class="pill red">Vencida</span>';
         if ($i['status'] === 'SOLD' && !$i['paid']) $status .= ' <span class="pill red">Por cobrar</span>';
+        if (!empty($i['inStore'])) $status .= ' <span class="pill purple">🛒 En tienda</span>';
         $client = $i['clientId'] !== null && isset($clients[$i['clientId']]) ? $clients[$i['clientId']] : null;
         $price = $i['status'] === 'SOLD' ? $i['salePrice'] : $i['suggestedPrice'];
         $sub = category_label($i['category']);

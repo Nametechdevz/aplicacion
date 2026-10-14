@@ -9,7 +9,7 @@ if (!defined('INV_APP')) {
 }
 
 const INV_VERSION = '1.0.0';
-const INV_SCHEMA = 1;
+const INV_SCHEMA = 2;
 
 class ApiError extends Exception
 {
@@ -36,6 +36,7 @@ function entity_fields()
             'expirationDate' => 'i?', 'status' => 's', 'clientId' => 'i?', 'saleDate' => 'i?',
             'salePrice' => 'f', 'clientExpirationDate' => 'i?', 'paid' => 'b', 'lastReminderAt' => 'i?',
             'notes' => 't', 'createdAt' => 'i', 'updatedAt' => 'i', 'kind' => 's', 'parentId' => 'i?',
+            'inStore' => 'b', 'storeUrl' => 't',
             'rev' => 'i',
         ),
         'clients' => array(
@@ -125,6 +126,26 @@ function create_schema(PDO $pdo)
     $pdo->exec("CREATE TABLE IF NOT EXISTS `user_settings` (`user_id` INT NOT NULL PRIMARY KEY, `data` TEXT NULL) $engine");
     $pdo->exec("CREATE TABLE IF NOT EXISTS `meta` (`k` VARCHAR(50) NOT NULL PRIMARY KEY, `v` TEXT NULL) $engine");
     $pdo->exec("INSERT IGNORE INTO `meta` (`k`, `v`) VALUES ('rev', '0'), ('schema', '" . INV_SCHEMA . "')");
+}
+
+/**
+ * Actualiza la base de datos de instalaciones anteriores (se llama en cada solicitud; si ya está
+ * al día solo hace una consulta).
+ * v2: productos publicados en la tienda web (inStore, storeUrl).
+ */
+function ensure_schema()
+{
+    $version = (int) meta_get('schema', '1');
+    if ($version >= INV_SCHEMA) {
+        return;
+    }
+    if ($version < 2) {
+        $cols = db()->query("SHOW COLUMNS FROM `items` LIKE 'inStore'")->fetchAll();
+        if (!$cols) {
+            db()->exec("ALTER TABLE `items` ADD COLUMN `inStore` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `storeUrl` TEXT NULL");
+        }
+    }
+    meta_set('schema', (string) INV_SCHEMA);
 }
 
 // ---------------------------------------------------------------- respuestas

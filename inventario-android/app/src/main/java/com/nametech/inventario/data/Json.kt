@@ -19,6 +19,7 @@ fun Item.toJson() = JSONObject()
     .put("paid", paid).put("lastReminderAt", lastReminderAt ?: JSONObject.NULL).put("notes", notes)
     .put("createdAt", createdAt).put("updatedAt", updatedAt)
     .put("kind", kind).put("parentId", parentId ?: JSONObject.NULL).put("rev", rev)
+    .put("inStore", inStore).put("storeUrl", storeUrl)
 
 fun JSONObject.toItem() = Item(
     id = getLong("id"), category = optString("category", "OTRO"), name = optString("name"), plan = optString("plan"),
@@ -33,6 +34,7 @@ fun JSONObject.toItem() = Item(
     createdAt = optLong("createdAt", System.currentTimeMillis()),
     updatedAt = optLong("updatedAt", System.currentTimeMillis()),
     kind = optString("kind", ItemKind.SINGLE), parentId = optLongOrNull("parentId"), rev = optLong("rev", 0),
+    inStore = optBoolean("inStore", false), storeUrl = optString("storeUrl"),
 )
 
 fun Client.toJson() = JSONObject()

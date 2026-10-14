@@ -12,6 +12,8 @@ Servidor para la app Android **Inventario Pro**. Se instala en cualquier hosting
   con perfiles), se **vende** (cuenta completa o un perfil), se renueva, se libera, se marca como
   pagado, se eliminan productos, se gestionan clientes y se envían los datos o recordatorios por
   WhatsApp. Todo se sincroniza con la app.
+- **Tienda web**: cada producto se puede marcar como *publicado en la tienda* (con su link), y hay
+  un filtro «En tienda» en la app y en el panel.
 
 ## Instalación (una sola vez)
 

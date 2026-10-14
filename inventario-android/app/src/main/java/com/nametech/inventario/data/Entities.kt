@@ -62,6 +62,10 @@ data class Item(
     val parentId: Long? = null,
     /** Revisión en el servidor (0 = solo en el teléfono). */
     val rev: Long = 0,
+    /** Publicado en la tienda web del negocio. */
+    val inStore: Boolean = false,
+    /** Link del producto en la tienda web (opcional). */
+    val storeUrl: String = "",
 )
 
 val Item.isAccount: Boolean get() = kind == ItemKind.ACCOUNT

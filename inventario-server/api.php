@@ -18,6 +18,7 @@ header('X-Content-Type-Options: nosniff');
 $route = isset($_GET['r']) ? $_GET['r'] : '';
 
 try {
+    ensure_schema();
     switch ($route) {
         case 'ping':
             send_json(array('ok' => true, 'app' => 'inventario-pro', 'version' => INV_VERSION));
@@ -236,6 +237,14 @@ function api_commit()
             $row = cast_row($table, $incoming);
             if ($table === 'items') {
                 $row['updatedAt'] = $now;
+                // Versiones anteriores de la app no envían estos campos: se conservan los guardados.
+                if (!array_key_exists('inStore', $incoming)) {
+                    $existing = fetch_row($owner, 'items', $row['id']);
+                    if ($existing) {
+                        $row['inStore'] = $existing['inStore'];
+                        $row['storeUrl'] = $existing['storeUrl'];
+                    }
+                }
             }
             $row['rev'] = $rev;
             upsert_row($owner, $table, $row);

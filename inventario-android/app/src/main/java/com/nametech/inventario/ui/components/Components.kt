@@ -69,6 +69,7 @@ import com.nametech.inventario.ui.theme.Amber
 import com.nametech.inventario.ui.theme.Blue
 import com.nametech.inventario.ui.theme.Gray
 import com.nametech.inventario.ui.theme.Green
+import com.nametech.inventario.ui.theme.Purple
 import com.nametech.inventario.ui.theme.Red
 import com.nametech.inventario.util.Fmt
 import com.nametech.inventario.util.copyToClipboard
@@ -137,6 +138,7 @@ fun StatusBadges(item: Item, today: Long, dueSoonDays: Int) {
             }
         }
         if (item.status == ItemStatus.SOLD && !item.paid) Badge("Por cobrar", Red)
+        if (item.inStore) Badge("En tienda", Purple)
     }
 }
 

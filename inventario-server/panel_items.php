@@ -235,6 +235,13 @@ function handle_item_action($action)
             flash($inactive ? 'Producto dado de baja' : 'Producto reactivado ✅');
             redirect('item', '&id=' . $it['id']);
         case 'item_delete': return action_item_delete();
+        case 'item_store':
+            $it = require_item(post('id'));
+            $on = empty($it['inStore']);
+            tx(function ($rev) use ($it, $on) { put_row('items', array_merge($it, array('inStore' => $on)), $rev); });
+            log_activity($user, ($on ? 'Publicó en la tienda ' : 'Quitó de la tienda ') . display_name($it) . ' (panel web)');
+            flash($on ? 'Marcado como publicado en la tienda 🛒' : 'Quitado de la tienda');
+            redirect('item', '&id=' . $it['id']);
         case 'item_message':
             // Marca el recordatorio (si aplica) y abre WhatsApp con el mensaje listo.
             $it = require_item(post('id'));
@@ -284,6 +291,8 @@ function action_item_save()
         'purchaseDate' => parse_day(post('purchaseDate')),
         'expirationDate' => parse_day(post('expirationDate')),
         'notes' => trim(post('notes')),
+        'inStore' => post('inStore') === '1',
+        'storeUrl' => trim(post('storeUrl')),
     );
 
     if ($id > 0) {
@@ -510,6 +519,7 @@ function status_pills($it)
     if ($it['status'] !== 'INACTIVE' && $st['time'] === 'soon') $out .= ' <span class="pill amber">Por vencer</span>';
     if ($it['status'] !== 'INACTIVE' && $st['time'] === 'expired') $out .= ' <span class="pill red">Vencida</span>';
     if ($it['status'] === 'SOLD' && !$it['paid']) $out .= ' <span class="pill red">Por cobrar</span>';
+    if (!empty($it['inStore'])) $out .= ' <span class="pill purple">🛒 En tienda</span>';
     return $out;
 }
 
@@ -571,6 +581,7 @@ function page_item()
     }
     if ($it['status'] !== 'INACTIVE' && $it['kind'] !== 'PROFILE') echo '<a class="btn small ghost" href="panel.php?p=renew&id=' . $it['id'] . '">↻ Renovar</a>';
     echo '<a class="btn small ghost" href="panel.php?p=item_edit&id=' . $it['id'] . '">✎ Editar</a>';
+    echo action_button('item_store', $it['id'], empty($it['inStore']) ? '🛒 Publicar en tienda' : 'Quitar de la tienda');
     echo action_button('item_inactive', $it['id'], $it['status'] === 'INACTIVE' ? 'Reactivar' : 'Dar de baja');
     $delMsg = $profiles ? 'Se eliminará la cuenta y sus ' . count($profiles) . ' perfiles. ¿Continuar?' : 'Se eliminará el producto. ¿Continuar?';
     echo action_button('item_delete', $it['id'], 'Eliminar', 'danger', $delMsg);
@@ -586,6 +597,8 @@ function page_item()
         . info_row('Precio de venta', $it['suggestedPrice'] > 0 ? money($it['suggestedPrice'], $settings) : '')
         . info_row('Fecha de compra', $it['purchaseDate'] !== null ? fmt_day($it['purchaseDate']) : '')
         . info_row('Vence la cuenta (proveedor)', $it['expirationDate'] !== null ? fmt_day($it['expirationDate']) . ' · ' . days_text($it['expirationDate'] - $today) : 'Sin vencimiento');
+    echo info_row('Tienda web', !empty($it['inStore']) ? 'Publicado' : 'No publicado');
+    if ($it['storeUrl'] !== '') echo '<div class="info"><span>Link en la tienda</span><b><a target="_blank" rel="noopener" href="' . h(preg_match('#^https?://#', $it['storeUrl']) ? $it['storeUrl'] : 'https://' . $it['storeUrl']) . '">' . h($it['storeUrl']) . '</a></b></div>';
     if ($it['notes'] !== '') echo info_row('Notas', $it['notes']);
     echo '</section></div>';
 
@@ -697,6 +710,9 @@ function page_item_edit()
     foreach (array(1 => '+1 mes', 3 => '+3 meses', 6 => '+6 meses', 12 => '+1 año') as $m => $l) echo '<button type="button" onclick="plusMonths(\'pd\',\'ed\',' . $m . ')">' . $l . '</button>';
     echo '<button type="button" onclick="document.getElementById(\'ed\').value=\'\'">Sin vencimiento</button></div></div>';
     echo '<label>Notas<textarea name="notes" rows="2">' . h($v['notes']) . '</textarea></label>';
+    echo '<h4>Tienda web</h4><div class="fgrid">';
+    echo '<label class="check"><input type="checkbox" name="inStore" value="1"' . (!empty($v['inStore']) ? ' checked' : '') . '> 🛒 Publicado en mi tienda web</label>';
+    echo '<label>Link del producto en la tienda (opcional)<input name="storeUrl" value="' . h($v['storeUrl']) . '" placeholder="https://mitienda.com/producto"></label></div>';
 
     if (!$it) {
         echo '<div id="account-box" style="display:none"><h4>Perfiles</h4><p class="note">Se guarda la cuenta completa y sus perfiles. Al vender se elige la cuenta completa o un solo perfil. El costo se reparte entre los perfiles.</p><div class="fgrid">';

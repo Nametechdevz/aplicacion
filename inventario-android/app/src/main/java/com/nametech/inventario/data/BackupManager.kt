@@ -56,7 +56,7 @@ class BackupManager(private val context: Context, private val repo: InventoryRep
         val header = listOf(
             "ID", "Tipo", "Cuenta (ID)", "Categoría", "Servicio", "Plan", "Usuario", "Clave", "Perfil/PIN", "Link", "Proveedor",
             "Costo", "Precio sugerido", "Fecha compra", "Vence cuenta", "Estado", "Cliente", "WhatsApp",
-            "Fecha venta", "Precio venta", "Vence cliente", "Pagado", "Notas",
+            "Fecha venta", "Precio venta", "Vence cliente", "Pagado", "En tienda", "Link tienda", "Notas",
         )
         val rows = repo.allItems().map { i ->
             val c = i.clientId?.let { clients[it] }
@@ -65,7 +65,8 @@ class BackupManager(private val context: Context, private val repo: InventoryRep
                 i.profilePin, i.accessUrl, i.supplier, Fmt.plain(i.costPrice), Fmt.plain(i.suggestedPrice),
                 Fmt.date(i.purchaseDate), Fmt.date(i.expirationDate), statusLabel(i.status), c?.name.orEmpty(),
                 c?.whatsapp.orEmpty(), Fmt.date(i.saleDate), Fmt.plain(i.salePrice), Fmt.date(i.clientExpirationDate),
-                if (i.status == ItemStatus.SOLD) (if (i.paid) "Sí" else "No") else "", i.notes,
+                if (i.status == ItemStatus.SOLD) (if (i.paid) "Sí" else "No") else "",
+                if (i.inStore) "Sí" else "No", i.storeUrl, i.notes,
             )
         }
         write(uri, csv(header, rows))

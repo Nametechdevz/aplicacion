@@ -119,7 +119,7 @@ interface SaleDao {
     suspend fun deleteIds(ids: List<Long>)
 }
 
-@Database(entities = [Item::class, Client::class, Sale::class], version = 3, exportSchema = true)
+@Database(entities = [Item::class, Client::class, Sale::class], version = 4, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun items(): ItemDao
     abstract fun clients(): ClientDao
@@ -128,7 +128,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "inventario.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
 
         /** v2: cuentas completas con perfiles. */
@@ -147,6 +147,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE clients ADD COLUMN rev INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE sales ADD COLUMN rev INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE sales ADD COLUMN createdBy TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** v4: productos publicados en la tienda web. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN inStore INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE items ADD COLUMN storeUrl TEXT NOT NULL DEFAULT ''")
             }
         }
     }

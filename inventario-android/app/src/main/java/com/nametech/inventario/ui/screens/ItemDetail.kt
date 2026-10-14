@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -155,6 +156,11 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Más") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (product.inStore) "Quitar de la tienda" else "Publicar en la tienda") },
+                        leadingIcon = { Icon(Icons.Filled.Storefront, null) },
+                        onClick = { menu = false; vm.launch { vm.repo.setInStore(product, !product.inStore) } },
+                    )
                     DropdownMenuItem(
                         text = { Text("Duplicar") },
                         leadingIcon = { Icon(Icons.Filled.FileCopy, null) },
@@ -373,6 +379,8 @@ fun ItemDetailScreen(vm: AppViewModel, nav: Nav, id: Long) {
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                    InfoRow("Tienda web", if (product.inStore) "🛒 Publicado" else "No publicado")
+                    InfoRow("Link en la tienda", product.storeUrl, copyable = true, onClick = { context.openUrl(product.storeUrl) })
                     InfoRow("Registrado", Fmt.dateTime(product.createdAt))
                 }
             }

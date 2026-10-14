@@ -172,6 +172,16 @@ fun DashboardScreen(vm: AppViewModel, nav: Nav) {
                         LabeledValue("Stock (precio sugerido)", Fmt.money(stockValue, s), Modifier.weight(1f))
                         LabeledValue("Clientes", clients.orEmpty().size.toString(), Modifier.weight(1f))
                     }
+                    SpacerH(12)
+                    Row {
+                        LabeledValue(
+                            "🛒 Publicados en la tienda",
+                            count(Filter.IN_STORE).toString(),
+                            Modifier
+                                .weight(1f)
+                                .clickable { vm.inventoryFilter = Filter.IN_STORE; vm.inventoryCategory = null; nav.tab("inventory") },
+                        )
+                    }
                 }
             }
             if (upcoming.isNotEmpty()) {

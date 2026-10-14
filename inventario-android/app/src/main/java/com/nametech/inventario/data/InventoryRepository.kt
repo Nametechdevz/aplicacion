@@ -338,6 +338,9 @@ class InventoryRepository(
         commit(ChangeSet().apply { put(updated, item) })
     }
 
+    suspend fun setInStore(item: Item, inStore: Boolean) =
+        commit(ChangeSet().apply { put(item.copy(inStore = inStore, updatedAt = System.currentTimeMillis()), item) })
+
     suspend fun markReminded(item: Item) =
         commit(ChangeSet().apply { put(item.copy(lastReminderAt = System.currentTimeMillis()), item) })
 
