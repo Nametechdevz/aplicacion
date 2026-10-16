@@ -68,7 +68,13 @@ final class InstallController extends Controller
     private function guard(): void
     {
         $token = (string) Env::get('INSTALL_TOKEN', '');
-        if (strlen($token) < 32 || $this->superadminExists()) {
+        if ($this->superadminExists()) {
+            throw HttpException::notFound('La página que busca no existe.');
+        }
+        if ($token !== '' && strlen($token) < 32) {
+            throw new HttpException(403, 'El INSTALL_TOKEN del archivo .env tiene ' . strlen($token) . ' caracteres; debe tener al menos 32. Corríjalo y recargue esta página.');
+        }
+        if ($token === '') {
             throw HttpException::notFound('La página que busca no existe.');
         }
     }

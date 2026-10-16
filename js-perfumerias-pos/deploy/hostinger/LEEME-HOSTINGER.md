@@ -85,7 +85,7 @@ php bin/create-superadmin.php
 **Opción B — sin SSH (instalador web de un solo uso):**
 
 1. En `.env` agregue una línea con un código aleatorio largo (32 caracteres o más), por ejemplo:
-   `INSTALL_TOKEN=7f3k9Qz2Lm8Xw4Rt6Yp1Nb5Vc0Hs3Jd`
+   `INSTALL_TOKEN=38c2d0243f1a244e8ca29989669c8002acb2d17b` (40 caracteres; use uno propio)
 2. Abra `https://su-dominio.com/install`, escriba ese código y los datos del superadministrador.
    El instalador crea todas las tablas y la cuenta.
 3. **Borre la línea `INSTALL_TOKEN` del `.env`.** (La página `/install` ya deja de funcionar en
