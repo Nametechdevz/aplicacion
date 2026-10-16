@@ -15,6 +15,29 @@ Ambas deben quedar **una al lado de la otra** dentro de la carpeta de su dominio
 └── js-pos/
 ```
 
+## 0. ¿Dominio principal o subdominio? (importante)
+
+Cada dominio o subdominio tiene su **carpeta raíz**. Para saber cuál es:
+hPanel → **Dominios → Subdominios** (columna *Carpeta*) o, si el subdominio es un sitio aparte,
+**Sitios web → Administrar → Administrador de archivos**.
+
+| Caso | Carpeta raíz típica | Dónde va el contenido de `public_html/` del ZIP | Dónde va `js-pos/` |
+|---|---|---|---|
+| Dominio principal | `domains/midominio.com/public_html` | dentro de esa carpeta | `domains/midominio.com/js-pos` |
+| Subdominio dentro del dominio | `domains/midominio.com/public_html/pos` | **dentro de `public_html/pos`** | `domains/midominio.com/js-pos` |
+| Subdominio como sitio aparte | `domains/pos.midominio.com/public_html` | dentro de esa carpeta | `domains/pos.midominio.com/js-pos` |
+
+El `index.php` busca `js-pos` automáticamente en su misma carpeta y hasta tres niveles arriba,
+así que basta con que `js-pos` quede **en la carpeta del dominio** (fuera del acceso web).
+
+**Prueba rápida:** abra `https://su-subdominio/index.php`.
+- Si ve la página **404 morada de Hostinger**, el `index.php` no está en la carpeta raíz correcta.
+- Si ve “Falta la carpeta js-pos”, mueva `js-pos` como indica la tabla.
+- Si ve el inicio de sesión de JS Perfumerías, todo está en su lugar.
+
+Active **“Mostrar archivos ocultos”** en el Administrador de archivos y confirme que `.htaccess`
+está dentro de la carpeta raíz junto a `index.php`; sin él, todas las rutas dan 404.
+
 ## 1. Preparar en hPanel
 
 1. **Sitios web → Administrar → Avanzado → Configuración de PHP:** seleccione **PHP 8.3**
