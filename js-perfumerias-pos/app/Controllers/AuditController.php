@@ -20,6 +20,12 @@ final class AuditController extends Controller
             $where[] = "a.branch_id IN ($in)";
             $params += $bp;
         }
+        $branch = $this->request->int('branch');
+        if ($branch) {
+            Auth::authorizeBranch($branch);
+            $where[] = 'a.branch_id = :fb';
+            $params['fb'] = $branch;
+        }
         $user = $this->request->int('user');
         if ($user) {
             $where[] = 'a.user_id = :u';
@@ -53,7 +59,9 @@ final class AuditController extends Controller
             'title' => 'Auditoría', 'active' => 'audit', 'crumbs' => [['Auditoría', null]],
             'rows' => $rows, 'total' => $total, 'page' => $page, 'per' => $per,
             'users' => $this->db->all('SELECT id, name FROM users ORDER BY name'),
-            'filters' => ['user' => $user, 'module' => $module, 'from' => $from, 'to' => $to, 'q' => $q],
+            'branches' => $this->db->all('SELECT id, name, type FROM branches WHERE id IN (' . implode(',', array_map('intval', Auth::branchIds() ?: [0])) . ') ORDER BY type = \'store\', name'),
+            'branchName' => $branch ? $this->db->value('SELECT name FROM branches WHERE id = :id', ['id' => $branch]) : null,
+            'filters' => ['branch' => $branch, 'user' => $user, 'module' => $module, 'from' => $from, 'to' => $to, 'q' => $q],
         ]);
     }
 }

@@ -84,7 +84,8 @@ final class UserController extends Controller
             throw HttpException::notFound();
         }
         [$in, $bp] = Database::in(Auth::branchIds() ?: [0]);
-        $access = $id ? $svc->accessSnapshot($id) : ['roles' => [], 'branches' => [], 'grants' => [], 'denies' => []];
+        $pre = $this->request->int('branch');
+        $access = $id ? $svc->accessSnapshot($id) : ['roles' => [], 'branches' => $pre && Auth::canAccessBranch($pre) ? [$pre] : [], 'grants' => [], 'denies' => []];
         $permissions = $this->db->all('SELECT * FROM permissions ORDER BY module, id');
         $rolePerms = [];
         foreach ($this->db->all('SELECT r.code, p.code AS perm FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id') as $r) {
@@ -96,7 +97,7 @@ final class UserController extends Controller
             'user' => $user, 'access' => $access,
             'roles' => $svc->assignableRoles(),
             'branches' => $this->db->all("SELECT id, name, type FROM branches WHERE id IN ($in) ORDER BY type = 'warehouse', name", $bp),
-            'defaultBranch' => $id ? $this->db->value('SELECT branch_id FROM branch_user_assignments WHERE user_id = :id AND is_default = 1', ['id' => $id]) : null,
+            'defaultBranch' => $id ? $this->db->value('SELECT branch_id FROM branch_user_assignments WHERE user_id = :id AND is_default = 1', ['id' => $id]) : ($access['branches'][0] ?? null),
             'permissions' => $permissions, 'rolePerms' => $rolePerms,
             'ownLimit' => $id ? $this->db->value("SELECT max_percent FROM discount_limits WHERE scope = 'user' AND scope_id = :id", ['id' => $id]) : null,
             'scripts' => ['user-form.js'],

@@ -4,7 +4,7 @@ $totalToday = array_sum(array_map(fn ($b) => (float) $b['today'], $stores));
 $totalMonth = array_sum(array_map(fn ($b) => (float) $b['month'], $stores));
 ?>
 <div class="page-head">
-  <div><div class="eyebrow">Administración</div><h1>Sucursales</h1><p>Puntos de venta y almacén central. Al crear una sucursal se habilita su primera caja.</p></div>
+  <div><div class="eyebrow">Administración</div><h1>Sucursales</h1><p>Puntos de venta y almacén central. Cada sucursal tiene sus propios accesos: sus usuarios solo ven la información de su sede, y usted puede auditarla por separado.</p></div>
   <div class="page-actions"><button class="btn btn-primary" type="button" data-open="branch-new"><?= icon('plus') ?> Nueva sucursal</button></div>
 </div>
 
@@ -20,7 +20,7 @@ $totalMonth = array_sum(array_map(fn ($b) => (float) $b['month'], $stores));
 <section class="panel">
   <div class="table-wrap">
     <table class="table table-stack">
-      <thead><tr><th>Sucursal</th><th>Ubicación</th><th class="num">Equipo</th><th>Cajas</th><th class="num">Hoy</th><th class="num">Mes</th><th class="num">Inventario al costo</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Sucursal</th><th>Ubicación</th><th class="num">Equipo</th><th>Cajas</th><th class="num">Ventas mes</th><th class="num">Inventario</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($branches as $b): ?>
           <tr>
@@ -31,20 +31,19 @@ $totalMonth = array_sum(array_map(fn ($b) => (float) $b['month'], $stores));
               </div>
             </td>
             <td data-label="Ubicación"><?= e($b['address'] ?: '—') ?><div class="muted" style="font-size:12px"><?= e(trim(($b['city'] ?? '') . ($b['phone'] ? ' · ' . $b['phone'] : ''), ' ·')) ?></div></td>
-            <td class="num" data-label="Equipo"><?= (int) $b['users'] ?> <span class="muted">usuarios</span></td>
+            <td class="num" data-label="Equipo"><?php if ((int) $b['users']): ?><a class="link" href="<?= e(url('/users', ['branch' => $b['id']])) ?>"><?= (int) $b['users'] ?> <?= (int) $b['users'] === 1 ? 'usuario' : 'usuarios' ?></a><?php else: ?><a class="btn btn-sm" href="<?= e(url('/users/create', ['branch' => $b['id']])) ?>"><?= icon('user-plus', 'icon-sm') ?> Crear acceso</a><?php endif; ?></td>
             <td data-label="Cajas">
               <?php foreach ($registers[(int) $b['id']] ?? [] as $r): ?><span class="pill" style="margin:2px"><?= e($r['name']) ?></span><?php endforeach; ?>
               <?php if ((int) $b['open_sessions']): ?><span class="badge badge-success"><?= (int) $b['open_sessions'] ?> abierta(s)</span><?php endif; ?>
-              <?php if ($b['type'] === 'store' && empty($registers[(int) $b['id']])): ?><span class="muted">—</span><?php endif; ?>
+              <?php if ($b['type'] === 'store'): ?><button class="link-btn" type="button" data-open="register-<?= (int) $b['id'] ?>" style="display:block;margin-top:4px"><?= icon('plus', 'icon-sm') ?> Caja</button><?php endif; ?>
             </td>
-            <td class="num" data-label="Hoy"><?= $b['type'] === 'store' ? e(money($b['today'])) : '—' ?></td>
-            <td class="num" data-label="Mes"><strong><?= $b['type'] === 'store' ? e(money($b['month'])) : '—' ?></strong></td>
+            <td class="num" data-label="Ventas mes"><?php if ($b['type'] === 'store'): ?><strong><?= e(money($b['month'])) ?></strong><div class="muted" style="font-size:12px">hoy <?= e(money($b['today'])) ?></div><?php else: ?>—<?php endif; ?></td>
             <td class="num" data-label="Inventario"><?= e(money($b['stock_value'])) ?><?php if ((int) $b['low']): ?><div class="text-warning" style="font-size:12px"><?= (int) $b['low'] ?> bajo mínimo</div><?php endif; ?></td>
             <td data-label="Estado"><?= status_badge((int) $b['is_active'] ? 'active' : 'inactive') ?></td>
-            <td class="actions">
+            <td class="actions nowrap">
               <button class="btn btn-ghost btn-sm btn-icon" type="button" data-open="branch-<?= (int) $b['id'] ?>" title="Editar" aria-label="Editar <?= e($b['name']) ?>"><?= icon('edit', 'icon-sm') ?></button>
-              <?php if ($b['type'] === 'store'): ?><button class="btn btn-ghost btn-sm btn-icon" type="button" data-open="register-<?= (int) $b['id'] ?>" title="Agregar caja" aria-label="Agregar caja"><?= icon('plus', 'icon-sm') ?></button><?php endif; ?>
-              <a class="btn btn-ghost btn-sm btn-icon" href="<?= e(url('/users', ['branch' => $b['id']])) ?>" title="Ver equipo" aria-label="Ver equipo"><?= icon('users', 'icon-sm') ?></a>
+              <a class="btn btn-ghost btn-sm btn-icon" href="<?= e(url('/users/create', ['branch' => $b['id']])) ?>" title="Crear acceso para esta sucursal" aria-label="Crear acceso"><?= icon('user-plus', 'icon-sm') ?></a>
+              <?php if (can('audit.view')): ?><a class="btn btn-ghost btn-sm btn-icon" href="<?= e(url('/audit', ['branch' => $b['id']])) ?>" title="Auditoría de la sucursal" aria-label="Auditoría"><?= icon('shield', 'icon-sm') ?></a><?php endif; ?>
               <form method="post" action="<?= e(url('/branches/' . $b['id'] . '/toggle')) ?>" style="display:inline" data-confirm="<?= (int) $b['is_active'] ? '¿Desactivar ' . e($b['name']) . '?' : '¿Activar ' . e($b['name']) . '?' ?>" data-confirm-text="<?= (int) $b['is_active'] ? 'No podrá vender ni recibir transferencias mientras esté inactiva. Su historial se conserva.' : 'Volverá a operar normalmente.' ?>" <?= (int) $b['is_active'] ? 'data-danger' : '' ?>>
                 <?= csrf_field() ?><button type="submit" class="btn btn-ghost btn-sm btn-icon <?= (int) $b['is_active'] ? 'btn-danger-ghost' : '' ?>" title="<?= (int) $b['is_active'] ? 'Desactivar' : 'Activar' ?>" aria-label="<?= (int) $b['is_active'] ? 'Desactivar' : 'Activar' ?>"><?= icon('power', 'icon-sm') ?></button>
               </form>

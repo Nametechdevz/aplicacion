@@ -36,7 +36,7 @@ final class AuthController extends Controller
     public function logout(): Response
     {
         if (Auth::check()) {
-            Audit::log('auth.logout', 'user', Auth::id(), 'Cierre de sesión');
+            Audit::log('auth.logout', 'user', Auth::id(), 'Cierre de sesión', null, null, Auth::activeBranchId());
         }
         Auth::logout();
         return $this->redirect('/login');

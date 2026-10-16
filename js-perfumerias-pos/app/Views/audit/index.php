@@ -8,11 +8,12 @@ $tone = static function (string $a): string {
     };
 }; ?>
 <div class="page-head">
-  <div><div class="eyebrow">Administración</div><h1>Auditoría</h1><p>Registro inalterable de operaciones sensibles con valores anteriores y posteriores. Solo lectura.</p></div>
+  <div><div class="eyebrow">Administración</div><h1>Auditoría<?= $branchName ? ' · ' . e($branchName) : '' ?></h1><p>Registro inalterable de operaciones sensibles con valores anteriores y posteriores. Solo lectura.</p></div>
 </div>
 <section class="panel">
   <form class="toolbar" method="get" data-autosubmit>
     <div class="input-group grow"><?= icon('search') ?><input class="input" type="search" name="q" value="<?= e($filters['q']) ?>" placeholder="Buscar en la descripción" aria-label="Buscar"></div>
+    <select class="select" name="branch" aria-label="Sucursal"><option value="">Todas las sucursales</option><?php foreach ($branches as $b): ?><option value="<?= (int) $b['id'] ?>" <?= (int) $filters['branch'] === (int) $b['id'] ? 'selected' : '' ?>><?= e($b['name']) ?></option><?php endforeach; ?></select>
     <select class="select" name="module" aria-label="Módulo"><option value="">Todos los módulos</option><?php foreach ($modules as $k => $l): ?><option value="<?= $k ?>" <?= $filters['module'] === $k ? 'selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
     <select class="select" name="user" aria-label="Usuario"><option value="">Todos los usuarios</option><?php foreach ($users as $u): ?><option value="<?= (int) $u['id'] ?>" <?= (int) $filters['user'] === (int) $u['id'] ? 'selected' : '' ?>><?= e($u['name']) ?></option><?php endforeach; ?></select>
     <input class="input" type="date" name="from" value="<?= e($filters['from']) ?>" aria-label="Desde" style="width:150px"><input class="input" type="date" name="to" value="<?= e($filters['to']) ?>" aria-label="Hasta" style="width:150px">

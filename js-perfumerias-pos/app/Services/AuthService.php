@@ -26,7 +26,8 @@ final class AuthService
         }
         Auth::login($user);
         $this->db->execute('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = :id', ['id' => $user['id']]);
-        Audit::log('auth.login', 'user', (int) $user['id'], 'Inicio de sesión', null, null, null, (int) $user['id']);
+        $branch = $this->db->value('SELECT branch_id FROM branch_user_assignments WHERE user_id = :u ORDER BY is_default DESC, branch_id LIMIT 1', ['u' => $user['id']]);
+        Audit::log('auth.login', 'user', (int) $user['id'], 'Inicio de sesión', null, null, $branch !== null ? (int) $branch : null, (int) $user['id']);
         return $user;
     }
 
