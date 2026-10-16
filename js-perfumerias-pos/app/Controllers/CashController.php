@@ -22,11 +22,8 @@ final class CashController extends Controller
              JOIN users u ON u.id = cm.user_id WHERE cm.cash_session_id = :s ORDER BY cm.id DESC LIMIT 60',
             ['s' => $session['id']]
         ) : [];
-        $registers = $branchId ? $this->db->all(
-            "SELECT cr.*, (SELECT u.name FROM cash_sessions cs JOIN users u ON u.id = cs.user_id WHERE cs.register_id = cr.id AND cs.status = 'open' LIMIT 1) AS busy_by
-             FROM cash_registers cr WHERE cr.branch_id = :b AND cr.is_active = 1 ORDER BY cr.name",
-            ['b' => $branchId]
-        ) : [];
+        $opening = $branchId ? $cash->openingContext($branchId, (int) Auth::id()) : ['registers' => [], 'elsewhere' => null];
+        $registers = $opening['registers'];
         $branch = $branchId ? $this->db->one('SELECT * FROM branches WHERE id = :id', ['id' => $branchId]) : null;
         $openSessions = [];
         if (Auth::can('cash.view_branch')) {
@@ -42,7 +39,7 @@ final class CashController extends Controller
         return $this->view('cash/index', [
             'title' => 'Caja', 'active' => 'cash', 'crumbs' => [['Caja', null]],
             'session' => $session, 'summary' => $summary, 'movements' => $movements, 'registers' => $registers,
-            'branch' => $branch, 'openSessions' => $openSessions,
+            'branch' => $branch, 'openSessions' => $openSessions, 'elsewhere' => $opening['elsewhere'],
         ]);
     }
 

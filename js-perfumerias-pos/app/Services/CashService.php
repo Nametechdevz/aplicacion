@@ -38,6 +38,29 @@ final class CashService
         );
     }
 
+    /**
+     * Datos para el formulario de apertura: cajas de la sucursal (con quién las
+     * ocupa) y el turno abierto que el usuario pueda tener en otra sucursal.
+     */
+    public function openingContext(int $branchId, int $userId): array
+    {
+        $registers = $this->db->all(
+            "SELECT cr.*, cs.id AS busy_session_id, cs.user_id AS busy_user_id, cs.opened_at AS busy_since, u.name AS busy_by
+             FROM cash_registers cr
+             LEFT JOIN cash_sessions cs ON cs.register_id = cr.id AND cs.status = 'open'
+             LEFT JOIN users u ON u.id = cs.user_id
+             WHERE cr.branch_id = :b AND cr.is_active = 1 ORDER BY cr.name",
+            ['b' => $branchId]
+        );
+        $elsewhere = $this->db->one(
+            "SELECT cs.id, cs.branch_id, cs.opened_at, cr.name AS register_name, b.name AS branch_name
+             FROM cash_sessions cs JOIN cash_registers cr ON cr.id = cs.register_id JOIN branches b ON b.id = cs.branch_id
+             WHERE cs.user_id = :u AND cs.status = 'open' AND cs.branch_id <> :b LIMIT 1",
+            ['u' => $userId, 'b' => $branchId]
+        );
+        return ['registers' => $registers, 'elsewhere' => $elsewhere];
+    }
+
     public function open(int $registerId, string $openingAmount): int
     {
         Auth::authorize('cash.operate');

@@ -21,19 +21,8 @@ $denoms = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
       <div class="panel-head"><div><h2>Abrir turno</h2><div class="sub">Cuente el efectivo de base antes de iniciar.</div></div></div>
       <?php if (!$branch || $branch['type'] !== 'store'): ?>
         <div class="panel-body"><div class="callout callout-info"><?= icon('info', 'icon-sm') ?><span>La sucursal activa no es un punto de venta. Cámbiela en el selector de la barra lateral.</span></div></div>
-      <?php elseif (!$registers): ?>
-        <div class="panel-body"><div class="callout callout-warning"><?= icon('alert', 'icon-sm') ?><span>No hay cajas registradas en esta sucursal.</span></div></div>
       <?php else: ?>
-      <form method="post" action="<?= e(url('/cash/open')) ?>" class="panel-body stack" style="gap:14px">
-        <?= csrf_field() ?>
-        <div class="field"><label for="register_id">Caja</label>
-          <select class="select" id="register_id" name="register_id" required>
-            <?php foreach ($registers as $r): ?><option value="<?= (int) $r['id'] ?>" <?= $r['busy_by'] ? 'disabled' : '' ?>><?= e($r['name']) ?><?= $r['busy_by'] ? ' — en uso por ' . e($r['busy_by']) : '' ?></option><?php endforeach; ?>
-          </select></div>
-        <div class="field"><label for="opening_amount">Fondo inicial en efectivo</label>
-          <div class="input-group"><span class="icon" style="left:13px;width:auto;font-weight:700;color:var(--muted)">$</span><input class="input" id="opening_amount" name="opening_amount" inputmode="decimal" required value="0"></div></div>
-        <button class="btn btn-primary btn-lg" type="submit" <?= can('cash.operate') ? '' : 'disabled' ?>><?= icon('wallet') ?> Abrir turno</button>
-      </form>
+        <div class="panel-body stack" style="gap:14px"><?= \App\Core\View::partial('cash/open-form', ['registers' => $registers, 'elsewhere' => $elsewhere]) ?></div>
       <?php endif; ?>
     </section>
     <?php if ($openSessions): ?>

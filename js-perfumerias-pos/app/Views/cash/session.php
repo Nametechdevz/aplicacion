@@ -7,6 +7,8 @@ $diff = (float) ($s['difference'] ?? 0);
     <p><?= e(fmt_dt($s['opened_at'])) ?> — <?= e($s['closed_at'] ? fmt_dt($s['closed_at']) : 'en curso') ?></p></div>
   <div class="page-actions">
     <button class="btn" type="button" data-print><?= icon('printer') ?> Imprimir</button>
+    <?php $canClose = $s['status'] === 'open' && can('cash.operate') && ((int) $s['user_id'] === (int) \App\Core\Auth::id() || can('cash.approve')); ?>
+    <?php if ($canClose): ?><button class="btn btn-primary" type="button" data-open="close-session"><?= icon('lock') ?> Cerrar turno</button><?php endif; ?>
     <?php if ($s['status'] === 'closed' && can('cash.approve')): ?>
       <form method="post" action="<?= e(url('/cash/sessions/' . $s['id'] . '/approve')) ?>" data-confirm="¿Aprobar este cierre?" data-confirm-text="Confirme que revisó el conteo y la diferencia." data-confirm-reason="Observaciones de la revisión" data-confirm-min="0">
         <?= csrf_field() ?><input type="hidden" name="notes" value=""><button class="btn btn-primary" type="submit"><?= icon('check') ?> Aprobar cierre</button></form>
@@ -63,3 +65,18 @@ $diff = (float) ($s['difference'] ?? 0);
     </div>
   </section>
 </div>
+
+<?php if ($canClose): ?>
+<dialog class="modal" id="close-session" aria-labelledby="close-session-t">
+  <form class="modal-card" method="post" action="<?= e(url('/cash/close')) ?>" data-ajax data-confirm="¿Cerrar el turno de <?= e($s['user_name']) ?>?" data-confirm-text="Un turno cerrado no admite modificaciones; el cierre queda auditado a su nombre.">
+    <?= csrf_field() ?><input type="hidden" name="session_id" value="<?= (int) $s['id'] ?>">
+    <div class="modal-head"><div><h2 id="close-session-t">Cerrar turno #<?= (int) $s['id'] ?></h2><p><?= e($s['register_name']) ?> · <?= e($s['user_name']) ?>. Efectivo esperado: <strong><?= e(money($summary['expected_cash'])) ?></strong></p></div><button class="icon-btn" type="button" data-close aria-label="Cerrar"><?= icon('x') ?></button></div>
+    <div class="modal-body stack" style="gap:14px">
+      <?php if ((int) $s['user_id'] !== (int) \App\Core\Auth::id()): ?><div class="callout callout-info"><?= icon('info', 'icon-sm') ?><span>Está cerrando el turno de otro cajero como supervisor. Cuente el efectivo físico de la caja.</span></div><?php endif; ?>
+      <div class="field"><label for="cs-counted">Efectivo contado<span class="req">*</span></label><input class="input" id="cs-counted" name="counted_cash" inputmode="decimal" required placeholder="Ej. <?= e(\App\Support\Dec::norm($summary['expected_cash'], 0)) ?>"></div>
+      <div class="field"><label for="cs-notes">Observaciones</label><textarea class="textarea" id="cs-notes" name="notes" rows="2" maxlength="500" placeholder="Obligatorio si hay diferencia"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit"><?= icon('lock') ?> Cerrar turno</button></div>
+  </form>
+</dialog>
+<?php endif; ?>

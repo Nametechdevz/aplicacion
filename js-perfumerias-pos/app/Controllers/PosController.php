@@ -31,11 +31,8 @@ final class PosController extends Controller
         }
         $cash = new CashService();
         $session = $cash->openSessionFor((int) Auth::id(), $branchId);
-        $registers = $this->db->all(
-            "SELECT cr.*, (SELECT u.name FROM cash_sessions cs JOIN users u ON u.id = cs.user_id WHERE cs.register_id = cr.id AND cs.status = 'open' LIMIT 1) AS busy_by
-             FROM cash_registers cr WHERE cr.branch_id = :b AND cr.is_active = 1 ORDER BY cr.name",
-            ['b' => $branchId]
-        );
+        $opening = $cash->openingContext($branchId, (int) Auth::id());
+        $registers = $opening['registers'];
         $config = [
             'branch' => ['id' => (int) $branch['id'], 'name' => $branch['name']],
             'user' => ['id' => Auth::id(), 'name' => Auth::user()['name']],
@@ -54,7 +51,7 @@ final class PosController extends Controller
             'storage_key' => 'jsp-cart-' . Auth::id() . '-' . $branchId,
         ];
         return $this->view('pos/index', $base + [
-            'config' => $config, 'session' => $session, 'registers' => $registers, 'branch' => $branch, 'stores' => $stores,
+            'config' => $config, 'session' => $session, 'registers' => $registers, 'elsewhere' => $opening['elsewhere'], 'branch' => $branch, 'stores' => $stores,
             'scripts' => ['pos.js'],
         ]);
     }

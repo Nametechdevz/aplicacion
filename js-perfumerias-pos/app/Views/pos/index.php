@@ -62,25 +62,14 @@
 
     <?php if (!$session): ?>
     <div class="cart-lock" data-cash-lock style="position:absolute;inset:0;background:color-mix(in srgb, var(--surface) 94%, transparent);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:24px;z-index:3">
-      <form method="post" action="<?= e(url('/cash/open')) ?>" class="panel" style="width:100%;max-width:340px;box-shadow:var(--shadow-md)" data-ajax data-reload>
-        <?= csrf_field() ?>
+      <div class="panel" style="width:100%;max-width:360px;box-shadow:var(--shadow-md)">
         <div class="panel-body stack" style="gap:14px">
           <div><div class="eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-strong)">Inicio de turno</div>
             <h2 style="font-size:18px;margin-top:6px">Abra su caja para vender</h2>
             <p class="muted" style="font-size:13px;margin-top:4px">Registre el fondo inicial en efectivo.</p></div>
-          <?php if (can('cash.operate') && $registers): ?>
-            <div class="field"><label for="register_id">Caja</label>
-              <select class="select" id="register_id" name="register_id" required>
-                <?php foreach ($registers as $r): ?><option value="<?= (int) $r['id'] ?>" <?= $r['busy_by'] ? 'disabled' : '' ?>><?= e($r['name']) ?><?= $r['busy_by'] ? ' — en uso por ' . e($r['busy_by']) : '' ?></option><?php endforeach; ?>
-              </select></div>
-            <div class="field"><label for="opening_amount">Fondo inicial</label>
-              <input class="input" id="opening_amount" name="opening_amount" inputmode="decimal" required value="0"></div>
-            <button class="btn btn-primary btn-lg btn-block" type="submit"><?= icon('wallet') ?> Abrir caja</button>
-          <?php else: ?>
-            <div class="callout callout-warning"><?= icon('alert', 'icon-sm') ?><span>No hay cajas disponibles o no tiene permiso para abrir caja en esta sucursal.</span></div>
-          <?php endif; ?>
+          <?= \App\Core\View::partial('cash/open-form', ['registers' => $registers, 'elsewhere' => $elsewhere, 'ajax' => true]) ?>
         </div>
-      </form>
+      </div>
     </div>
     <?php endif; ?>
   </aside>

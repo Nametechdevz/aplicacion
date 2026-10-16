@@ -477,4 +477,18 @@ T::test('Las salidas HTML se escapan (XSS)', function () {
     T::assertSame('&lt;script&gt;alert(1)&lt;/script&gt;', e('<script>alert(1)</script>'));
 });
 
+T::test('Apertura de caja: el POS explica qué caja está ocupada y un supervisor puede cerrar ese turno', function () use ($ids, $cash, $session1, $db) {
+    T::actingAs('admin1', 's1');
+    $html = T::http('GET', '/pos', [], false)->body;
+    $busyName = (string) $db->value('SELECT name FROM cash_registers WHERE id = :id', ['id' => $ids['r1']]);
+    T::assertTrue(str_contains($html, '<strong>' . e($busyName) . '</strong> está en uso por'), 'Debe indicar la caja ocupada');
+    T::assertTrue(str_contains($html, 'value="' . $ids['r1b'] . '" selected'), 'Debe preseleccionar una caja libre');
+    T::assertTrue(!str_contains($html, '<option value="' . $ids['r1'] . '"'), 'La caja ocupada no se ofrece');
+    $expected = $cash->summary($session1)['expected_cash'];
+    T::assertSame(200, T::http('POST', '/cash/close', ['session_id' => (string) $session1, 'counted_cash' => $expected, 'notes' => ''])->status);
+    T::assertTrue($db->value('SELECT status FROM cash_sessions WHERE id = :id', ['id' => $session1]) !== 'open');
+    T::actingAs('cashier1', 's1');
+    T::assertTrue(str_contains(T::http('GET', '/pos', [], false)->body, 'value="' . $ids['r1'] . '" selected'));
+});
+
 exit(T::summary());
