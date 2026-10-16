@@ -17,6 +17,7 @@ use App\Controllers\CashController;
 use App\Controllers\CatalogController;
 use App\Controllers\CustomerController;
 use App\Controllers\DashboardController;
+use App\Controllers\InstallController;
 use App\Controllers\InventoryController;
 use App\Controllers\PosController;
 use App\Controllers\ProductController;
@@ -30,6 +31,10 @@ use App\Controllers\SettingsController;
 use App\Controllers\SupplierController;
 use App\Controllers\TransferController;
 use App\Controllers\UserController;
+
+// Instalador web de un solo uso (solo con INSTALL_TOKEN y sin superadministrador).
+$router->get('/install', [InstallController::class, 'show']);
+$router->post('/install', [InstallController::class, 'install']);
 
 $router->get('/login', [AuthController::class, 'showLogin'], ['guest']);
 $router->post('/login', [AuthController::class, 'login'], ['guest']);

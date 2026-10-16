@@ -78,7 +78,12 @@ final class App
             Session::flash('error', $message);
             return Response::redirect(Auth::check() ? '/' : '/login');
         }
-        $html = View::render('errors/error', ['status' => $status, 'message' => $message], Auth::check() ? 'layouts/app' : 'layouts/guest');
+        try {
+            $logged = Auth::check();
+        } catch (Throwable) {
+            $logged = false; // p. ej. base de datos aún sin instalar
+        }
+        $html = View::render('errors/error', ['status' => $status, 'message' => $message], $logged ? 'layouts/app' : 'layouts/guest');
         return Response::html($html, $status);
     }
 

@@ -18,6 +18,16 @@ function base_path(string $path = ''): string
     return dirname(__DIR__, 2) . ($path !== '' ? '/' . ltrim($path, '/') : '');
 }
 
+/**
+ * Carpeta pública (document root). Por defecto public/; en hosting compartido
+ * el index.php de public_html define JSP_PUBLIC_PATH.
+ */
+function public_path(string $path = ''): string
+{
+    $root = defined('JSP_PUBLIC_PATH') ? JSP_PUBLIC_PATH : base_path('public');
+    return rtrim($root, '/') . ($path !== '' ? '/' . ltrim($path, '/') : '');
+}
+
 function url(string $path = '/', array $query = []): string
 {
     if (preg_match('#^https?://#', $path)) {
@@ -31,7 +41,7 @@ function url(string $path = '/', array $query = []): string
 /** URL de un recurso estático con versión para invalidar caché. */
 function asset(string $path): string
 {
-    $file = base_path('public/assets/' . ltrim($path, '/'));
+    $file = public_path('assets/' . ltrim($path, '/'));
     $v = is_file($file) ? substr(md5((string) filemtime($file)), 0, 8) : '1';
     return url('assets/' . ltrim($path, '/')) . '?v=' . $v;
 }

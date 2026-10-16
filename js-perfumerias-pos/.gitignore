@@ -10,3 +10,4 @@
 !/public/uploads/products/.gitkeep
 /tests/output/
 /node_modules/
+/dist/

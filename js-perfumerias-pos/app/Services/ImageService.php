@@ -27,7 +27,7 @@ final class ImageService
     public function __construct(private ?Database $db = null, private ?string $dir = null)
     {
         $this->db ??= Database::connection();
-        $this->dir ??= base_path('public/uploads/products');
+        $this->dir ??= public_path('uploads/products');
     }
 
     public function upload(int $productId, array $file): int
