@@ -1,0 +1,12 @@
+/vendor/
+.env
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/backups/*
+!/storage/backups/.gitkeep
+/public/uploads/products/*
+!/public/uploads/products/.gitkeep
+/tests/output/
+/node_modules/
