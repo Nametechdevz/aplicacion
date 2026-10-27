@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "camion-cuentas",
+    "name": "Mi Camión",
     "slug": "camion-cuentas",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,15 +11,21 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1F2937",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.juancho.micamion"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "scheme": "micamion",
+    "plugins": [
+      "expo-router",
+      "expo-sqlite"
+    ]
   }
 }
